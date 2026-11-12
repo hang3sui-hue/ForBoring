@@ -93,8 +93,9 @@
     <a class="game" data-g="roulette" href="roulette/"><div class="ic">🔫</div><div class="nm">俄罗斯轮盘</div><div class="ds">朝自己还是朝 TA？赌一把运气</div></a>
     <a class="game" data-g="blackjack" href="blackjack/"><div class="ic">🂡</div><div class="nm">21 点</div><div class="ds">要牌还是停牌？谁更接近 21 谁赢</div></a>
     <a class="game" data-g="typing" href="typing/"><div class="ic">⌨️</div><div class="nm">打字比赛</div><div class="ds">同一段话一起打 · 实时看到对方进度</div></a>
+    <a class="game" data-g="connect4" href="connect4/"><div class="ic">🔴🟡</div><div class="nm">四子棋</div><div class="ds">轮流落子连成四颗 · 也能和电脑玩</div></a>
+    <a class="game" data-g="tacit" href="tacit/"><div class="ic">💞</div><div class="nm">默契大考验</div><div class="ds">偷偷选，同时揭晓 · 也来猜猜 TA</div></a>
     <div class="game soon"><span class="tag">即将上线</span><div class="ic">🎨</div><div class="nm">你画我猜</div><div class="ds">一个画一个猜</div></div>
-    <div class="game soon"><span class="tag">即将上线</span><div class="ic">💞</div><div class="nm">默契大考验</div><div class="ds">同一道题，看你们选得一不一样</div></div>
   </div>
 
   <p class="foot">无需注册 · 国内可直接打开<br>把房间号发给 TA，进同一个房间后选游戏，TA 会收到邀请</p>
@@ -108,7 +109,7 @@
 <script>
 (() => {
   const BROKER='wss://broker-cn.emqx.io:8084/mqtt', ALIVE_MS=45000;
-  const GAMES={ gomoku:'五子棋', rps:'石头剪刀布', battleship:'海战棋', bomb:'数字炸弹', jenga:'抽积木', roulette:'俄罗斯轮盘', blackjack:'21 点', typing:'打字比赛', hub:'主页' };
+  const GAMES={ gomoku:'五子棋', rps:'石头剪刀布', battleship:'海战棋', bomb:'数字炸弹', jenga:'抽积木', roulette:'俄罗斯轮盘', blackjack:'21 点', typing:'打字比赛', connect4:'四子棋', tacit:'默契大考验', hub:'主页' };
   const $=id=>document.getElementById(id);
   const myId=FB.id();
   let client=null, base='', conn=false, peers=new Map(), hb=null, tick=null, code='', wasPresent=new Set();

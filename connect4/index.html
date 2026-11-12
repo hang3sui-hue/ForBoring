@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>四子棋 · ForBoring</title>
+<link rel="stylesheet" href="../common.css?v=1794503478">
+<style>
+  .stage{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:16px 10px;text-align:center}
+  .eyebrow{color:var(--muted);font-size:12px;letter-spacing:2px;margin-bottom:8px}
+  .seats{display:flex;gap:10px;margin:12px 0}.seat{flex:1;min-width:0;background:var(--card);border:1.5px solid var(--line);border-radius:14px;padding:10px 7px;text-align:center;font-size:13px;overflow-wrap:anywhere}.seat.active{border-color:var(--accent);background:var(--accent-soft)}
+  .stone{display:inline-block;width:13px;height:13px;border-radius:50%;margin-right:6px;vertical-align:-2px}.red{background:#d9586b}.gold{background:#e9ad51}
+  .board{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;padding:7px;border-radius:16px;background:#dbc6ae;box-shadow:inset 0 2px 5px #9f80632b;overflow:hidden}
+  .col{padding:0;background:transparent;border-radius:8px;display:flex;flex-direction:column;gap:5px;min-width:0}.col:disabled{opacity:1}.col:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.col:not(:disabled):hover{background:#fff4}
+  .slot{display:block;aspect-ratio:1;border-radius:50%;background:#f6efe6;box-shadow:inset 0 2px 4px #7b563e2b;position:relative}
+  .disc{position:absolute;inset:2px;border-radius:50%;box-shadow:inset 0 2px 4px #ffffff65,0 2px 3px #704e332e}.disc.won{outline:3px solid #fff9e5;outline-offset:-5px;box-shadow:0 0 9px #fff9e5}.disc.last:after{content:'';position:absolute;inset:39%;border-radius:50%;background:#fff9}
+  .disc.drop{animation:drop .48s cubic-bezier(.4,0,.8,1)}@keyframes drop{0%{transform:translateY(var(--fall));opacity:.5}85%{transform:translateY(3px);opacity:1}100%{transform:translateY(0)}}
+  .numbers{display:grid;grid-template-columns:repeat(7,1fr);font-size:11px;color:var(--muted);padding:8px 7px 0}.private{min-height:15px;color:var(--muted);opacity:.3;font-size:11px;margin-top:6px}.status{line-height:1.6;margin:8px 0}.caption{font-size:12px;color:var(--muted);line-height:1.7;margin-top:10px}.reacts button{font-size:20px;padding:6px 1px}
+  @media(prefers-reduced-motion:reduce){.disc.drop{animation:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section id="lobby">
+    <a class="back" href="../">‹ 返回主页</a><h1>四子棋</h1>
+    <p class="sub">落下一颗小心思，连成四颗就赢。<br>横着、竖着、斜着，都算数 🟡</p>
+    <div class="card"><label for="code">房间号（字母或数字）</label><div class="row"><input id="code" maxlength="12" placeholder="比如 love520" autocomplete="off" autocapitalize="off" spellcheck="false"><button id="rand" class="ghost" aria-label="随机房间号">🎲</button></div><button id="join" class="primary block">进入房间</button><div class="divider">或者</div><button id="local" class="ghost block" style="margin-top:6px">先和电脑玩</button></div>
+    <p class="hint">7 列 × 6 行，点一列落子。每局结束后交换先后手。</p>
+  </section>
+  <section id="game" class="hidden">
+    <div class="topbar"><div class="roomtag" id="roomtag"></div><div class="row" style="gap:6px"><button id="copy" class="ghost small">复制邀请</button><button id="leave" class="ghost small">离开</button></div></div>
+    <div class="seats"><div id="seat0" class="seat"></div><div id="seat1" class="seat"></div></div>
+    <div class="stage"><div class="eyebrow" id="round">四颗心，连在一起</div><div id="status" class="status" role="status" aria-live="polite"></div><div class="board" id="board" aria-label="四子棋棋盘"></div><div class="numbers" aria-hidden="true"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span></div><div class="private" id="private"></div></div>
+    <div class="caption" id="caption">点任意一列，棋子会落到最下方。</div><button id="again" class="ghost block">重开一局</button><div class="reacts" id="reacts"></div>
+  </section>
+</div>
+<div id="modal" class="modal hidden"><div class="card"><h3 id="mT"></h3><p id="mP"></p><div class="row" id="mBtns"></div></div></div><div id="toast" class="toast"></div>
+<script src="../common.js?v=1794503478"></script>
+<script src="../mqtt.min.js"></script>
+<script>
+(() => {
+  'use strict';
+  const ui=FB.ui,$=id=>document.getElementById(id),clone=s=>JSON.parse(JSON.stringify(s));
+  let mode=null,net=null,code='',st=null,position=null,ready=false,initT=null,botT=null,animationT=null,animating=false,xray=false,seq=[],celebrated='';
+  const me=()=>mode==='bot'?'me':net.myId;
+  const nameOf=id=>id==='bot'?'电脑':id===me()?'你':net.nameOf(id);
+  const newer=s=>!st||s.game>st.game||(s.game===st.game&&s.v>st.v);
+  function line(b,r,c){
+    const p=b[r*7+c];if(!p)return [];
+    for(const [dr,dc] of [[0,1],[1,0],[1,1],[1,-1]]){
+      const cells=[r*7+c];for(const sign of [-1,1]){let y=r+dr*sign,x=c+dc*sign;while(y>=0&&y<6&&x>=0&&x<7&&b[y*7+x]===p){cells.push(y*7+x);y+=dr*sign;x+=dc*sign;}}
+      if(cells.length>=4)return cells;
+    }return [];
+  }
+  // Replaying validates gravity, alternating turns, and that play stops at a result.
+  function replay(s){
+    const b=Array(42).fill(0);let win=[],winner=0,last=-1;
+    for(let i=0;i<s.moves.length;i++){
+      const c=s.moves[i];if(!Number.isInteger(c)||c<0||c>6||win.length)return null;
+      let r=5;while(r>=0&&b[r*7+c])r--;if(r<0)return null;
+      const p=(s.game+i)%2+1;last=r*7+c;b[last]=p;win=line(b,r,c);if(win.length)winner=p;
+    }return {b,win,winner,last,done:!!winner||s.moves.length===42,turn:(s.game+s.moves.length)%2};
+  }
+  function valid(s){
+    if(!s||!Number.isSafeInteger(s.game)||s.game<0||s.game>1e9||!Number.isSafeInteger(s.v)||!Array.isArray(s.moves)||s.moves.length>42||s.v!==s.moves.length||!Array.isArray(s.players)||s.players.length!==2||s.players[0]===s.players[1]||!s.players.every(x=>typeof x==='string'&&/^[a-z0-9]{1,16}$/.test(x)))return false;
+    return !!replay(s);
+  }
+  function compatible(s){return !st||s.game>st.game||(s.players.join('|')===st.players.join('|')&&st.moves.every((x,i)=>s.moves[i]===x));}
+  function seatsHere(){return mode==='bot'||(ready&&net.connected()&&st&&st.players.every(id=>id===net.myId||net.alive().includes(id)));}
+  function accept(s,send){
+    if(!valid(s)||!newer(s)||!compatible(s))return;
+    const old=st;st={game:s.game,v:s.v,players:s.players.slice(),moves:s.moves.slice()};position=replay(st);
+    const animate=old&&old.game===st.game&&st.v===old.v+1;
+    if(!old||old.game!==st.game)ui.close();
+    clearTimeout(animationT);animating=!!animate;
+    render(animate);if(send&&mode==='online')net.setState(st);
+    if(animate)animationT=setTimeout(()=>{animating=false;render();afterChange();},500);else afterChange();
+  }
+  function drop(c,by){
+    if(!st||position.done||animating||st.players[position.turn]!==by||!seatsHere())return;
+    if(mode==='online'&&!st.players.includes(me()))return;
+    if(position.b[c]){ui.toast('这一列满啦，换一列吧');return;}
+    const s=clone(st);s.moves.push(c);s.v++;accept(s,true);
+  }
+  function restart(){
+    if(mode==='online'){
+      if(!ready||!net.connected())return;
+      if(st){if(!st.players.includes(me())||!seatsHere()){ui.toast('等两位玩家都在线再开');return;}if(me()!==st.players[0]){net.emit('restart',{game:st.game});return;}}
+      else if(net.order().length!==2||net.order()[0]!==me())return;
+    }
+    accept({game:st?st.game+1:0,v:0,players:st?st.players.slice():mode==='bot'?['me','bot']:net.order(),moves:[]},true);
+  }
+  const columns=[3,2,4,1,5,0,6];
+  function put(b,c,p){let r=5;while(r>=0&&b[r*7+c])r--;if(r<0)return -1;b[r*7+c]=p;return r*7+c;}
+  function heuristic(b,p){
+    const opp=3-p;let score=0;
+    for(let r=0;r<6;r++){if(b[r*7+3]===p)score+=5;else if(b[r*7+3]===opp)score-=5;}
+    for(let r=0;r<6;r++)for(let c=0;c<7;c++)for(const [dy,dx] of [[0,1],[1,0],[1,1],[1,-1]]){
+      if(r+dy*3>=6||c+dx*3<0||c+dx*3>=7)continue;
+      let a=0,o=0;for(let k=0;k<4;k++){const v=b[(r+dy*k)*7+c+dx*k];if(v===p)a++;if(v===opp)o++;}
+      if(!o)score+=[0,1,8,55,10000][a];if(!a)score-=[0,1,9,65,10000][o];
+    }return score;
+  }
+  function search(b,depth,turn,root,alpha,beta){
+    if(!depth)return heuristic(b,root);let best=turn===root?-Infinity:Infinity,any=false;
+    for(const c of columns){if(b[c])continue;any=true;const i=put(b,c,turn);const won=line(b,Math.floor(i/7),c).length;const value=won?(turn===root?1:-1)*(100000+depth*100):search(b,depth-1,3-turn,root,alpha,beta);b[i]=0;
+      if(turn===root){best=Math.max(best,value);alpha=Math.max(alpha,best);}else{best=Math.min(best,value);beta=Math.min(beta,best);}if(beta<=alpha)break;
+    }return any?best:0;
+  }
+  function bestColumn(b,p){
+    let best=-Infinity,choice=-1;const copy=b.slice();
+    for(const c of columns){if(copy[c])continue;const i=put(copy,c,p);const score=line(copy,Math.floor(i/7),c).length?1e6:search(copy,3,3-p,p,-Infinity,Infinity);copy[i]=0;if(score>best){best=score;choice=c;}}
+    return choice;
+  }
+  function afterChange(){
+    if(!st)return;
+    if(position.done){const k=st.game+':'+st.v;if(celebrated!==k){celebrated=k;if(position.winner)ui.burst('🎉');}return;}
+    if(mode==='bot'&&!animating&&st.players[position.turn]==='bot'&&!botT)botT=setTimeout(()=>{botT=null;if(st&&!position.done&&st.players[position.turn]==='bot')drop(bestColumn(position.b,position.turn+1),'bot');},650);
+  }
+  function render(animate=false){
+    ui.roomTag(mode==='online'?net:null,code,'和电脑玩');$('copy').classList.toggle('hidden',mode!=='online');$('reacts').classList.toggle('hidden',mode!=='online');
+    const can=st&&!position.done&&!animating&&seatsHere()&&st.players[position.turn]===me();
+    $('status').className='status'+(can?' go':'');
+    if(!st)$('status').textContent=net&&!net.connected()?'连接中…':'等 TA 进入同一个房间…';
+    else if(position.done)$('status').textContent=position.winner?nameOf(st.players[position.winner-1])+'连成四颗，赢啦！🎉':'棋盘满啦，这局平手 🤝';
+    else if(!st.players.includes(me()))$('status').textContent='本局已有两位玩家，你正在观战';
+    else if(!seatsHere())$('status').textContent=mode==='online'&&!net.connected()?'连接断开，正在重连…':!ready?'正在同步房间…':'等 TA 回来，棋盘会留在这里';
+    else $('status').textContent=can?'轮到你，点一列落子 ↓':nameOf(st.players[position.turn])+'正在想下一步…';
+    $('round').textContent=st?'第 '+(st.game+1)+' 局 · 已落 '+st.moves.length+' 颗':'四颗心，连在一起';
+    for(let p=0;p<2;p++){const e=$('seat'+p);e.replaceChildren();const dot=document.createElement('i');dot.className='stone '+(p?'gold':'red');e.append(dot,document.createTextNode(st?nameOf(st.players[p])+((st.game%2===p)?' · 先手':' · 后手'):(p?'金色棋子':'莓红棋子')));e.classList.toggle('active',!!st&&!position.done&&position.turn===p);}
+    const board=$('board');board.replaceChildren();
+    for(let c=0;c<7;c++){
+      const b=document.createElement('button');b.className='col';b.dataset.c=c;b.disabled=!can||!!position.b[c];b.setAttribute('aria-label','第 '+(c+1)+' 列'+(position&&position.b[c]?'，已满':'，落子'));
+      for(let r=0;r<6;r++){const cell=document.createElement('span');cell.className='slot';const i=r*7+c,v=position?position.b[i]:0;if(v){const d=document.createElement('i');d.className='disc '+(v===1?'red':'gold')+(position.win.includes(i)?' won':'')+(position.last===i?' last':'')+(animate&&position.last===i?' drop':'');d.style.setProperty('--fall',(-115*(r+1))+'%');cell.appendChild(d);}b.appendChild(cell);}board.appendChild(b);
+    }
+    $('private').textContent=mode==='online'&&xray&&can?'· 第 '+(bestColumn(position.b,position.turn+1)+1)+' 列':'';
+    $('again').textContent=position&&position.done?'再来一局 · 交换先后手':'重开一局';$('again').disabled=mode==='online'&&(!st||!seatsHere()||!st.players.includes(me()));
+    $('caption').textContent=position&&position.done?'再来一局，先后手会互换。':'点一列，棋子从上方落下；小白点标记刚落下的棋子。';
+  }
+  function scheduleInit(){clearTimeout(initT);initT=setTimeout(()=>{ready=true;if(!st)restart();render();},1200);}
+  $('board').onclick=e=>{const b=e.target.closest('button');if(b&&!b.disabled)drop(+b.dataset.c,me());};
+  $('again').onclick=()=>{if(st&&!position.done&&st.moves.length)ui.modal('重开一局？','当前棋盘会清空，并交换先后手。',[{label:'取消'},{label:'重开',primary:true,fn:restart}]);else restart();};
+  $('copy').onclick=()=>ui.copyInvite(code,'四子棋');$('leave').onclick=()=>{if(net)net.close();location.href='../'+(mode==='online'?'#'+code:'');};
+  ui.reacts(()=>net,9,i=>{if(mode!=='online')return;seq.push(i);if(seq.length>7)seq.shift();if(seq.join('')==='0014785'){seq=[];xray=!xray;render();}});
+  function show(){$('lobby').classList.add('hidden');$('game').classList.remove('hidden');}
+  ui.lobby({onJoin(c){mode='online';code=c;show();net=FB.net('connect4',c,{
+    onConn(ok){if(ok)scheduleInit();else ready=false;render();},
+    onPeers(joined){if(joined.length)scheduleInit();render();},
+    onState(s){accept(s,false);},
+    onEvent(d){if(!st||!st.players.includes(d.from))return;if(d.t==='react'&&ui.EMO.slice(0,9).includes(d.e))ui.float(d.e);if(d.t==='restart'&&d.game===st.game&&me()===st.players[0])restart();}
+  });render();},onLocal(){mode='bot';show();restart();}});
+})();
+</script>
+</body>
+</html>
