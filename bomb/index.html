@@ -41,7 +41,7 @@
   <section id="lobby">
     <a class="back" href="../">‹ 返回主页</a>
     <h1>数字炸弹</h1>
-    <p class="sub">系统偷偷埋一个数字，你们轮流猜，范围越来越小……猜中的人就炸了 💣 被炸的要接受惩罚。</p>
+    <p class="sub">系统偷偷埋一个数字，你们轮流猜，范围越来越小……猜中的人就炸了 💣</p>
     <div class="card">
       <label for="code">房间号（字母或数字）</label>
       <div class="row">
@@ -163,8 +163,7 @@
       const bomb=dec(st.k,st.game), meLost=st.loser===ME();
       setTimeout(()=>{
         const title = meLost ? '你被炸了！💥' : nameOf(st.loser)+' 被炸了！💥';
-        ui.modal(title, '炸弹是 '+bomb+'。'+(meLost?'你':nameOf(st.loser))+'的惩罚：', [{label:'看看'},{label:'再来一局',primary:true,fn:()=>restart()}]);
-        const p=document.createElement('div'); p.className='punish'; p.textContent=PUNISH[st.pun]||PUNISH[0]; $('mP').appendChild(p);
+        ui.modal(title, '炸弹是 '+bomb, [{label:'看看'},{label:'再来一局',primary:true,fn:()=>restart()}]);
         if(!meLost) ui.burst('😂');
       }, 900);
     }
