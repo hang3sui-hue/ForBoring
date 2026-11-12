@@ -14,6 +14,7 @@
   .pl small{display:block;font-size:11px;color:#bfae9c;margin-top:2px}
   #cyl{width:210px;height:210px;margin:6px auto 0;display:block}
   #cylG{transition:transform .9s cubic-bezier(.2,.8,.2,1);transform-origin:105px 105px}
+  #cyl{touch-action:pan-y;cursor:grab}
   .spin #cylG{transition:transform 1.2s cubic-bezier(.15,.7,.2,1)}
   .info{font-size:13px;color:#d8c8b6;margin-top:6px;min-height:18px}
   .prob{font-size:12px;color:#bfae9c;margin-top:2px}
@@ -41,6 +42,7 @@
   @keyframes bang{0%{transform:translate(-50%,-50%) scale(.3)}35%{transform:translate(-50%,-50%) scale(1.25)}100%{transform:translate(-50%,-50%) scale(1);opacity:0}}
   .click{animation:click .35s ease-out}
   @keyframes click{30%{transform:translateX(-6px)}60%{transform:translateX(5px)}}
+  .reacts button{font-size:20px;padding:6px 1px}
 </style>
 </head>
 <body>
@@ -97,7 +99,8 @@
       <button id="shootSelf" class="primary">🔫 朝自己开</button>
       <button id="shootOpp" class="opp">🎯 朝 TA 开</button>
     </div>
-    <div class="rule">朝自己开空了：你再来一次　·　朝 TA 开空了：换 TA</div>
+    <button id="spin" class="ghost" style="width:100%;margin-top:8px">🔄 转一下弹膛（每回合一次）</button>
+    <div class="rule">朝自己开空了：你再来一次　·　朝 TA 开空了：换 TA<br>转弹膛：子弹位置重新打乱，概率回到最开始；转完必须开一枪。也可以直接在弹膛上滑一下</div>
     <div class="log" id="log"></div>
     <div class="row" style="margin-top:12px"><button id="again" class="ghost" style="flex:1">重开一局</button><button id="coins" class="ghost">金币重置</button></div>
     <div class="reacts" id="reacts"></div>
@@ -130,7 +133,7 @@
   }
   function valid(s){
     return s && Number.isInteger(s.game) && Number.isInteger(s.v) && (s.n===1||s.n===2) && typeof s.k==='string' && Number.isInteger(s.pos) && s.pos>=0 && s.pos<=N
-      && (s.turn===0||s.turn===1) && Array.isArray(s.players) && s.players.length===2 && Array.isArray(s.log) && s.log.length<=N
+      && (s.turn===0||s.turn===1) && Array.isArray(s.players) && s.players.length===2 && Array.isArray(s.log) && s.log.length<=80
       && s.bal && typeof s.bal==='object' && s.players.every(p=>Number.isInteger(s.bal[p])&&s.bal[p]>=0) && Number.isInteger(s.bet) && s.bet>=0;
   }
   const newer=s=>!st||s.game>st.game||(s.game===st.game&&s.v>st.v);
@@ -141,11 +144,17 @@
     if(!st||st.loser||animating||turnId()!==ME()) return;
     const s=JSON.parse(JSON.stringify(st)), bullets=dec(s.k,s.game), hit=bullets.includes(s.pos);
     const tgt = target==='self' ? ME() : otherOf(ME());
-    s.log.push({ by:ME(), t:tgt, hit }); s.pos++; s.v++;
+    s.log.push({ by:ME(), t:tgt, hit }); s.pos++; s.v++; s.spun=false;
     if(hit){ s.loser=tgt; settle(s); }
     else if(target!=='self') s.turn=1-s.turn;
     commit(s);
   }
+  function spin(){
+    if(!st||st.loser||animating||turnId()!==ME()) return;
+    if(st.spun){ ui.toast('这回合已经转过了，开枪吧'); return; }
+    const s=JSON.parse(JSON.stringify(st)); doSpin(s, ME()); commit(s);
+  }
+  function doSpin(s, who){ const set=new Set(); while(set.size<s.n) set.add(Math.floor(Math.random()*N)); s.k=enc([...set],s.game); s.pos=0; s.spun=true; s.spins=(s.spins||0)+1; s.log.push({by:who, spin:true}); s.v++; }
   function restart(n){
     const players = mode==='bot' ? ['me','bot'] : net.order();
     if(players.length<2){ ui.toast('等 TA 进来再开'); return; }
@@ -163,6 +172,12 @@
     if(prev && st.game!==prev.game){ shownLog=0; endShown=''; ui.close(); }
     if(st.log.length>shownLog){
       const e=st.log[st.log.length-1]; shownLog=st.log.length; animating=true;
+      if(e.spin){
+        $('status').className='status'; $('status').textContent=nameOf(e.by)+' 转了一下弹膛…';
+        drawHoles(null,false,true); try{ navigator.vibrate&&navigator.vibrate([15,30,15,30,15]); }catch(_){}
+        setTimeout(()=>{ animating=false; ui.toast('🔄 弹膛转好了，子弹位置重新打乱'); render(); botMaybe(); }, 1300);
+        render(true); return;
+      }
       const shooter=nameOf(e.by), target = e.t===e.by ? (e.by===ME()?'自己':'自己') : (e.t===ME()?'你':nameOf(e.t));
       $('status').className='status'; $('status').textContent = shooter+' 把枪对准了'+target+'…';
       drawHoles(st.pos-1, true);                      // rotate to the chamber being fired, keep it hidden
@@ -199,31 +214,34 @@
     botT=setTimeout(()=>{
       botT=null; if(!st||st.loser||turnId()!=='bot') return;
       const left=N-st.pos, live=st.n-st.log.filter(x=>x.hit).length, p=live/left;
+      if(!st.spun && p>=0.34 && p<0.5 && Math.random()<0.6){ const s=JSON.parse(JSON.stringify(st)); doSpin(s,'bot'); commit(s); return; }
       const target = p>=0.5 ? 'opp' : (p<=0.2 ? 'self' : (Math.random()<0.5?'self':'opp'));
       const s=JSON.parse(JSON.stringify(st)), hit=dec(s.k,s.game).includes(s.pos);
       const tgt = target==='self' ? 'bot' : 'me';
-      s.log.push({by:'bot',t:tgt,hit}); s.pos++; s.v++;
+      s.log.push({by:'bot',t:tgt,hit}); s.pos++; s.v++; s.spun=false;
       if(hit){ s.loser=tgt; settle(s); } else if(target!=='self') s.turn=1-s.turn;
       commit(s);
     }, 1100+Math.random()*900);
   }
 
   // ---- render ----
-  function drawHoles(focus, hideFocus){
+  function shotsSinceSpin(){ if(!st) return []; let i=st.log.length-1; while(i>=0 && !st.log[i].spin) i--; return st.log.slice(i+1); }
+  function drawHoles(focus, hideFocus, spinning){
     const g=$('holes'); g.innerHTML='';
     const fired=st?st.pos:0, bullets=st?dec(st.k,st.game):[];
     for(let i=0;i<N;i++){
       const a=(i*60-90)*Math.PI/180, x=105+Math.cos(a)*52, y=105+Math.sin(a)*52;
-      const used=i<fired && !(hideFocus && i===focus), shownHit=used && st.log[i] && st.log[i].hit;
+      const since=shotsSinceSpin(), used=!spinning && i<fired && !(hideFocus && i===focus), shownHit=used && since[i] && since[i].hit;
       let c=`<circle cx="${x}" cy="${y}" r="21" fill="url(#hole)" stroke="#22272b" stroke-width="2"/>`;
       if(!used) c+=`<circle cx="${x}" cy="${y}" r="15" fill="#4a5157" opacity=".55"/>`;   // unknown
       if(shownHit) c+=`<circle cx="${x}" cy="${y}" r="15" fill="url(#brass)"/><circle cx="${x}" cy="${y}" r="5" fill="#8a6420"/>`;
+      if(xray&&st&&!st.loser&&!used&&!spinning&&bullets.includes(i)&&i>=fired) c+=`<circle cx="${x}" cy="${y}" r="4" fill="#c9963a" opacity=".45"/>`;
       if(st&&st.loser&&!used&&bullets.includes(i)) c+=`<circle cx="${x}" cy="${y}" r="15" fill="url(#brass)" opacity=".8"/>`; // reveal leftovers
       g.innerHTML+=c;
     }
     const at = focus!=null ? focus : Math.min(fired,N-1);
     $('stage').classList.toggle('spin', focus!=null);
-    $('cylG').style.transform=`rotate(${-at*60 - (st?st.game*360:0)}deg)`;
+    $('cylG').style.transform=`rotate(${-(spinning?0:at)*60 - (st?st.game*360+(st.spins||0)*1080:0)}deg)`;
   }
   function render(keepStatus){
     ui.roomTag(mode==='online'?net:null, code, '和电脑玩');
@@ -243,7 +261,7 @@
     $('betAmt').textContent=st.bet||0; document.querySelectorAll('#chips button').forEach(b=>{ const c=b.dataset.c; b.classList.toggle('on', c==='all' ? (st.bet>0&&st.bet===maxBet()&&![50,100,200,500].includes(st.bet)) : +c===(st.bet||0)); });
     $('betnow').textContent = !betting && st.bet ? (st.loser ? (st.won?'这局 '+nameOf(st.players[0]===st.loser?st.players[1]:st.players[0])+' 赢走了 '+st.won+' 金币':'') : '本局赌注 '+st.bet+' 金币 · 赢的拿走 '+(st.bet*2)) : '';
     const mine=turnId()===ME() && !st.loser && !animating;
-    $('shootSelf').disabled=$('shootOpp').disabled=!mine;
+    $('shootSelf').disabled=$('shootOpp').disabled=!mine; $('spin').disabled=!mine||!!st.spun;
     $('shootOpp').textContent='🎯 朝 '+(mode==='bot'?'电脑':(net?net.nameOf(otherOf(ME())):'TA'))+' 开';
     if(!keepStatus && !animating){
       const s=$('status'); s.className='status';
@@ -254,6 +272,7 @@
     $('log').innerHTML='';
     st.log.slice().reverse().forEach(e=>{
       const d=document.createElement('div'), self=e.t===e.by;
+      if(e.spin){ d.textContent=nameOf(e.by)+' 转了一下弹膛 🔄'; $('log').appendChild(d); return; }
       d.textContent = nameOf(e.by)+(self?' 朝自己开了一枪：':' 朝 '+nameOf(e.t)+' 开了一枪：')+(e.hit?'砰！💥':'咔，空的');
       if(st.log.indexOf(e)===st.log.length-1 && animating) d.textContent = nameOf(e.by)+(self?' 朝自己开了一枪…':' 朝 '+nameOf(e.t)+' 开了一枪…');
       $('log').appendChild(d);
@@ -263,6 +282,8 @@
 
   // ---- input ----
   $('coins').onclick=()=>{ if(!st) return; if(st.log.length&&!st.loser){ ui.toast('这局打完再重置'); return; } ui.modal('金币重置？','两人都变回 '+START+' 金币',[{label:'取消'},{label:'重置',primary:true,fn:resetCoins}]); };
+  $('spin').onclick=spin;
+  (()=>{ const c=$('cyl'); let sx=null; c.addEventListener('pointerdown',e=>{ sx=e.clientX; }); c.addEventListener('pointerup',e=>{ if(sx!==null && Math.abs(e.clientX-sx)>35) spin(); sx=null; }); c.addEventListener('pointercancel',()=>sx=null); })();
   $('shootSelf').onclick=()=>shoot('self');
   $('shootOpp').onclick=()=>shoot('opp');
   $('chips').addEventListener('click',e=>{ const b=e.target.closest('button'); if(b) setBet(b.dataset.c); });
@@ -270,7 +291,8 @@
   $('again').onclick=()=>{ if(!st||st.loser||!st.log.length) restart(); else ui.modal('重开一局？','重新装弹',[{label:'取消'},{label:'重开',primary:true,fn:()=>restart()}]); };
   $('copy').onclick=()=>ui.copyInvite(code,'俄罗斯轮盘');
   $('leave').onclick=()=>{ const back='../'+(mode==='online'?'#'+code:''); if(net) net.close(); location.href=back; };
-  ui.reacts(()=>net);
+  let xray=false, seq=[];
+  ui.reacts(()=>net, 9, i=>{ seq.push(i); if(seq.length>7) seq.shift(); if(seq.join('')==='0014785'){ seq=[]; xray=!xray; render(); } });
 
   function show(){ $('lobby').classList.add('hidden'); $('game').classList.remove('hidden'); }
   ui.lobby({

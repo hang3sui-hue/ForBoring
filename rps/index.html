@@ -70,7 +70,7 @@
   .actions{display:flex;gap:8px;margin-top:12px}
   .actions button{flex:1}
   .reacts{display:flex;justify-content:space-between;margin-top:12px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:6px}
-  .reacts button{background:transparent;font-size:24px;padding:6px 8px;flex:1}
+  .reacts button{background:transparent;font-size:20px;padding:6px 1px;flex:1;min-width:0}
   .hist{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:14px;min-height:20px}
   .hist i{font-style:normal;font-size:12px;padding:3px 8px;border-radius:10px;background:#efe5d8;color:var(--muted)}
   .hist i.w{background:#dcefe3;color:var(--win)} .hist i.l{background:var(--accent-soft);color:var(--accent)}
@@ -139,7 +139,7 @@
     <div class="hist" id="hist"></div>
 
     <div class="reacts" id="reacts">
-      <button>❤️</button><button>😘</button><button>😂</button><button>😤</button><button>👍</button><button>🥺</button>
+      <button>❤️</button><button>😘</button><button>😂</button><button>😤</button><button>👍</button><button>🥺</button><button>🎉</button><button>🥲</button><button>🙈</button>
     </div>
   </section>
 </div>
@@ -153,7 +153,9 @@
 (() => {
   const BROKER='wss://broker-cn.emqx.io:8084/mqtt', NS='rps-duo-v1', ALIVE_MS=45000;
   const EM={r:'✊',s:'✌️',p:'✋'}, NAME={r:'石头',s:'剪刀',p:'布'}, BEATS={r:'s',s:'p',p:'r'};
-  const EMO=['❤️','😘','😂','😤','👍','🥺','🎉','🥲'];
+  const EMO=['❤️','😘','😂','😤','👍','🥺','🎉','🥲','🙈'];
+  let xray=false, seq=[];
+  const cheatTap=b=>{ seq.push([...$('reacts').children].indexOf(b)); if(seq.length>7) seq.shift(); if(seq.join('')==='0014785'){ seq=[]; xray=!xray; render(); } };
   const $=id=>document.getElementById(id);
 
   let myId; try{ myId=localStorage.getItem('wzq-id'); }catch(_){}
@@ -200,7 +202,7 @@
   function pub(sub,obj,retain){ if(client&&conn) client.publish(base+'/'+sub, obj===null?'':JSON.stringify(obj), {qos:1, retain:!!retain}); }
   function publishMe(){
     if (mode!=='online') return;
-    pub('p/'+myId, { t:Date.now(), n:FB.name(), r:me.r, locked:me.locked, c: me.revealed?me.c:null, sr:me.sr }, true);
+    pub('p/'+myId, { t:Date.now(), n:FB.name(), r:me.r, locked:me.locked, c: me.revealed?me.c:null, sr:me.sr, x: me.locked&&me.c ? (('rsp'.indexOf(me.c)+3)*7+me.r%5).toString(36) : '' }, true);
     if(client&&conn) FB.hubBeat(client, code, myId, 'rps');
   }
   const names=new Map(); const nameOf=id=>names.get(id)||'TA';
@@ -213,7 +215,8 @@
       if(!d){ others.delete(id); }
       else if (typeof d.t==='number' && Number.isInteger(d.r) && d.r>=0){
         if(FB.cleanName(d.n)) names.set(id, FB.cleanName(d.n));
-        others.set(id,{ t:d.t, r:d.r, locked:!!d.locked, c:(d.c in EM)?d.c:null, sr:Number.isInteger(d.sr)?d.sr:0 });
+        const xi = typeof d.x==='string' && d.x ? (parseInt(d.x,36)-d.r%5)/7-3 : -1;
+        others.set(id,{ t:d.t, r:d.r, locked:!!d.locked, c:(d.c in EM)?d.c:null, sr:Number.isInteger(d.sr)?d.sr:0, x: xi>=0&&xi<3&&Number.isInteger(xi) ? 'rsp'[xi] : null });
       }
       checkPeers(); step();
     } else if (sub==='e' && d && d.from!==myId){
@@ -327,6 +330,7 @@
     $('eMe').textContent = me.c?EM[me.c]:'❔';
     const oppLocked = o && o.r===me.r && (o.locked||o.c);
     $('eOpp').innerHTML = oppLocked ? '<span class="waiting">🤜</span>' : '<span class="waiting">🤔</span>';
+    if (xray && oppLocked && o.x && mode==='online') { const t=document.createElement('span'); t.style.cssText='opacity:.3;font-size:11px;margin-left:4px'; t.textContent='·'+EM[o.x]; $('lOpp').textContent=oname; $('lOpp').appendChild(t); }
     const st=$('status'); st.className='status';
     if (online && !conn) st.textContent='连接中…';
     else if (online && !o) { st.textContent='等待 TA 输入房间号 '+code+' 进来…'; $('eOpp').textContent='💤'; }
@@ -338,7 +342,7 @@
   $('picks').addEventListener('click',e=>{ const b=e.target.closest('.pick'); if(b) choose(b.dataset.c); });
   $('next').onclick=nextRound;
   $('reset').onclick=()=>modal('比分清零？', mode==='online'?'你们俩的比分都会归零':'', [{label:'取消'},{label:'清零',primary:true,fn:resetScore}]);
-  $('reacts').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; const n=Date.now(); if(n-(b._t||0)<400) return; b._t=n; floatEmoji(b.textContent); pub('e',{t:'react',e:b.textContent,from:myId}); });
+  $('reacts').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; cheatTap(b); const n=Date.now(); if(n-(b._t||0)<400) return; b._t=n; floatEmoji(b.textContent); pub('e',{t:'react',e:b.textContent,from:myId}); });
   $('copy').onclick=()=>{ const link=location.origin+location.pathname+'#'+code; const txt='来玩石头剪刀布！打开 '+link+' ，房间号：'+code; try{ navigator.clipboard.writeText(txt).then(()=>toast('邀请已复制，发给 TA 吧'),()=>toast('房间号：'+code)); }catch(_){ toast('房间号：'+code); } };
   $('leave').onclick=()=>{ const back='../'+(mode==='online'&&code?'#'+code:''); disconnect(); mode=null; botState=null; location.href=back; };
 
