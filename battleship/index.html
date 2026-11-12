@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>海战棋 · ForBoring</title>
+<style>
+  :root{ --bg:#f6efe6; --ink:#2b2420; --muted:#8a7b6f; --card:#fffaf4; --accent:#d9586b; --accent-soft:#f6dde1; --line:#e7dccf;
+         --sea:#d6e8f0; --sea2:#c3dcea; --ship:#5d7283; --ship2:#465a69; --hit:#e0455a; --sunk:#7d2a35; --win:#3f9d6b; }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,"PingFang SC","Microsoft YaHei","Noto Sans SC",system-ui,sans-serif}
+  body{min-height:100vh;display:flex;justify-content:center}
+  .wrap{width:100%;max-width:520px;padding:20px 16px 40px}
+  h1{font-family:"Songti SC","STSong","Noto Serif SC",serif;font-weight:700;font-size:30px;margin:8px 0 4px;letter-spacing:2px}
+  h2{font-size:15px;margin:16px 0 8px;display:flex;justify-content:space-between;align-items:baseline}
+  h2 small{font-weight:400;color:var(--muted);font-size:12px}
+  .sub{color:var(--muted);font-size:14px;margin:0 0 22px}
+  .back{display:inline-block;color:var(--muted);text-decoration:none;font-size:14px;margin-bottom:6px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:0 6px 24px rgba(80,50,30,.06)}
+  label{font-size:13px;color:var(--muted);display:block;margin-bottom:8px}
+  .row{display:flex;gap:10px}
+  input{flex:1;min-width:0;font:inherit;font-size:20px;letter-spacing:3px;padding:12px 14px;border-radius:12px;border:1.5px solid var(--line);background:#fff;color:var(--ink);outline:none;text-transform:lowercase}
+  input:focus{border-color:var(--accent)}
+  button{font:inherit;font-weight:500;border:none;border-radius:12px;padding:12px 16px;cursor:pointer;background:#efe5d8;color:var(--ink);transition:transform .08s,opacity .2s}
+  button:active{transform:scale(.97)}
+  button:disabled{opacity:.4;cursor:default}
+  .primary{background:var(--accent);color:#fff}
+  .ghost{background:transparent;border:1.5px solid var(--line)}
+  .block{width:100%;margin-top:12px;padding:14px}
+  .hint{font-size:13px;color:var(--muted);line-height:1.6;margin-top:14px}
+  .divider{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;margin:18px 0 6px}
+  .divider::before,.divider::after{content:"";flex:1;height:1px;background:var(--line)}
+  .hidden{display:none!important}
+  .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .roomtag{font-size:13px;color:var(--muted)}
+  .roomtag b{color:var(--ink);letter-spacing:2px;font-size:16px}
+  .small{padding:7px 12px;font-size:13px;border-radius:10px}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#bbb;margin-right:6px;vertical-align:middle}
+  .dot.on{background:#4caf7a}
+
+  .status{text-align:center;font-size:16px;margin:6px 0 4px;min-height:24px}
+  .status.go{color:var(--accent);font-weight:700}
+
+  .board{display:grid;grid-template-columns:repeat(10,1fr);gap:2px;padding:6px;border-radius:14px;background:#a9c9da;aspect-ratio:1;width:100%;box-shadow:0 8px 22px rgba(40,80,110,.15)}
+  .board.mini{width:62%;margin:0 auto;padding:4px;gap:1.5px;border-radius:10px}
+  .c{position:relative;border:none;padding:0;border-radius:4px;background:var(--sea);aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;cursor:pointer;min-width:0}
+  .board.mini .c{border-radius:2px;cursor:default}
+  .c:nth-child(odd){background:var(--sea2)}
+  .c.ship{background:var(--ship)}
+  .c.ship.sel{background:var(--accent)}
+  .c.miss::after{content:"";width:22%;aspect-ratio:1;border-radius:50%;background:#5a7a8c;opacity:.7}
+  .c.hit{background:var(--hit)}
+  .c.hit::after{content:"✕";font-weight:700;font-size:1.05em}
+  .c.sunk{background:var(--sunk)}
+  .c.sunk::after{content:"✕";font-weight:700;font-size:1.05em;opacity:.8}
+  .c.pend::after{content:"";width:40%;height:40%;border-radius:50%;border:2px solid var(--hit);animation:pulse 1s infinite}
+  .c.target{box-shadow:inset 0 0 0 3px var(--accent);background:#fff3f5}
+  .c.target::after{content:"◎";color:var(--accent);font-size:1.2em}
+  .c.reveal{background:#8aa0af}
+  .board.mini .c.hit::after,.board.mini .c.sunk::after{font-size:.7em}
+  .board.locked .c{cursor:default}
+  .board.myturn{box-shadow:0 0 0 3px var(--accent-soft),0 8px 22px rgba(40,80,110,.15)}
+  @keyframes pulse{50%{opacity:.3}}
+  .boom{animation:boom .5s ease-out}
+  @keyframes boom{0%{transform:scale(1.6)}100%{transform:scale(1)}}
+
+  .ships{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+  .chip{display:flex;align-items:center;gap:6px;padding:7px 10px;border-radius:10px;background:var(--card);border:1.5px solid var(--line);font-size:13px}
+  .chip .bar{display:flex;gap:2px}
+  .chip .bar i{width:9px;height:9px;border-radius:2px;background:var(--ship)}
+  .chip.sel{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  .chip.placed{opacity:.45}
+  .chip.dead{opacity:.5;text-decoration:line-through}
+  .chip.dead .bar i{background:var(--sunk)}
+  .tools{display:flex;gap:8px;margin-top:10px}
+  .tools button{flex:1}
+  .fire{width:100%;margin-top:12px;padding:15px;font-size:17px}
+  .legend{display:flex;justify-content:center;gap:14px;font-size:12px;color:var(--muted);margin-top:8px}
+  .legend span{display:flex;align-items:center;gap:4px}
+  .legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
+
+  .reacts{display:flex;justify-content:space-between;margin-top:14px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:6px}
+  .reacts button{background:transparent;font-size:24px;padding:6px 8px;flex:1}
+  .float{position:fixed;bottom:80px;font-size:34px;pointer-events:none;animation:up 2.2s ease-out forwards;z-index:50}
+  @keyframes up{0%{transform:translateY(0) scale(.6);opacity:0}15%{opacity:1;transform:translateY(-30px) scale(1.15)}100%{transform:translateY(-55vh) scale(1);opacity:0}}
+  .toast{position:fixed;left:50%;top:18px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:9px 16px;border-radius:20px;font-size:14px;z-index:120;opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap}
+  .toast.on{opacity:.94}
+  .modal{position:fixed;inset:0;background:rgba(40,25,15,.35);display:flex;align-items:center;justify-content:center;z-index:100;padding:24px}
+  .modal .card{max-width:340px;width:100%;text-align:center}
+  .modal h3{font-family:"Songti SC","STSong",serif;margin:4px 0 8px;font-size:22px}
+  .modal p{color:var(--muted);margin:0 0 16px;font-size:14px}
+  .modal .row button{flex:1}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section id="lobby">
+    <a class="back" href="../">‹ 返回主页</a>
+    <h1>海战棋</h1>
+    <p class="sub">经典版 · 10×10 海域 · 五艘战舰，先击沉对方全部舰队者胜</p>
+    <div class="card">
+      <label for="code">房间号（字母或数字）</label>
+      <div class="row">
+        <input id="code" maxlength="12" placeholder="比如 love520" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <button id="rand" class="ghost" title="随机生成">🎲</button>
+      </div>
+      <button id="join" class="primary block">进入房间</button>
+      <div class="hint">两个人输入同一个房间号配对。各自偷偷摆好舰队，然后轮流开炮。你的舰队位置只存在你自己手机上，TA 看不到。</div>
+      <div class="divider">或者</div>
+      <button id="bot" class="ghost block" style="margin-top:6px">先和电脑练练手</button>
+    </div>
+  </section>
+
+  <section id="game" class="hidden">
+    <div class="topbar">
+      <div class="roomtag" id="roomtag"></div>
+      <div class="row" style="gap:6px">
+        <button id="copy" class="ghost small">复制邀请</button>
+        <button id="leave" class="ghost small">离开</button>
+      </div>
+    </div>
+
+    <!-- placement -->
+    <div id="place">
+      <div class="status go" id="pStatus">摆放你的舰队</div>
+      <div class="ships" id="pShips"></div>
+      <div class="board" id="pBoard"></div>
+      <div class="tools">
+        <button id="rot">↻ 横着放</button>
+        <button id="rnd">🎲 随机摆</button>
+        <button id="clr" class="ghost">清空</button>
+      </div>
+      <button id="ready" class="primary fire" disabled>准备好了</button>
+      <div class="hint" style="text-align:center">选中一艘船，点格子放下；点已放好的船可以拿起来重放</div>
+    </div>
+
+    <!-- battle -->
+    <div id="battle" class="hidden">
+      <div class="status" id="status"></div>
+      <h2><span id="enemyTitle">TA的海域</span><small id="enemyLeft"></small></h2>
+      <div class="board" id="eBoard"></div>
+      <div class="ships" id="eShips"></div>
+      <button id="fire" class="primary fire" disabled>开火</button>
+      <h2><span>我的舰队</span><small id="myLeft"></small></h2>
+      <div class="board mini" id="mBoard"></div>
+      <div class="legend"><span><i style="background:var(--hit)"></i>命中</span><span><i style="background:var(--sunk)"></i>击沉</span><span><i style="background:var(--sea2);border-radius:50%;box-shadow:inset 0 0 0 4px var(--sea2),inset 0 0 0 6px #5a7a8c"></i>落空</span></div>
+      <div class="tools" style="margin-top:14px"><button id="again" class="ghost">重开一局</button></div>
+    </div>
+
+    <div class="reacts" id="reacts">
+      <button>❤️</button><button>😘</button><button>😂</button><button>😤</button><button>👍</button><button>🥺</button>
+    </div>
+  </section>
+</div>
+
+<div id="modal" class="modal hidden"><div class="card"><h3 id="mT"></h3><p id="mP"></p><div class="row" id="mBtns"></div></div></div>
+<div id="toast" class="toast"></div>
+
+<script src="../mqtt.min.js"></script>
+<script>
+(() => {
+  const BROKER='wss://broker-cn.emqx.io:8084/mqtt', NS='bs-duo-v1', ALIVE_MS=45000, S=10;
+  const SHIPS=[{n:'航母',len:5},{n:'战列舰',len:4},{n:'巡洋舰',len:3},{n:'潜艇',len:3},{n:'驱逐舰',len:2}];
+  const TOTAL=SHIPS.reduce((a,s)=>a+s.len,0);
+  const EMO=['❤️','😘','😂','😤','👍','🥺','🎉','🥲'];
+  const $=id=>document.getElementById(id);
+
+  let myId; try{ myId=localStorage.getItem('wzq-id'); }catch(_){}
+  if(!myId){ myId=Math.random().toString(36).slice(2,12); try{ localStorage.setItem('wzq-id',myId); }catch(_){} }
+
+  let mode=null, code='', client=null, base='', conn=false, hb=null, tick=null;
+  let others=new Map(), wasPresent=new Set();
+  let me=null;            // {g, fleet:[{i,cells}]|null, ready, fired:[]}
+  let draft=[], selShip=0, horiz=true, target=-1;
+  let seenMine=0, seenTheirs=0, overShown=-1;
+  let bot=null;           // {g, fleet, fired:[]}
+
+  // ---------- helpers ----------
+  function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('on'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('on'),1900); }
+  function modal(title,text,btns){ $('mT').textContent=title; $('mP').textContent=text; const b=$('mBtns'); b.innerHTML=''; btns.forEach(x=>{ const e=document.createElement('button'); e.textContent=x.label; if(x.primary) e.className='primary'; e.onclick=()=>{ $('modal').classList.add('hidden'); x.fn&&x.fn(); }; b.appendChild(e); }); $('modal').classList.remove('hidden'); }
+  function floatEmoji(e){ const el=document.createElement('div'); el.className='float'; el.textContent=e; el.style.left=(10+Math.random()*75)+'vw'; document.body.appendChild(el); setTimeout(()=>el.remove(),2300); }
+  function burst(e){ for(let i=0;i<8;i++) setTimeout(()=>floatEmoji(e),i*120); }
+  const oname=()=> mode==='bot'?'电脑':'TA';
+
+  function shipCells(x,y,len,h){ const c=[]; for(let k=0;k<len;k++){ const xx=h?x+k:x, yy=h?y:y+k; if(xx>=S||yy>=S) return null; c.push(yy*S+xx);} return c; }
+  function randomFleet(){
+    for(;;){
+      const used=new Set(), fleet=[]; let ok=true;
+      for(let i=0;i<SHIPS.length&&ok;i++){
+        let placed=false;
+        for(let t=0;t<200&&!placed;t++){
+          const h=Math.random()<.5, x=Math.floor(Math.random()*S), y=Math.floor(Math.random()*S);
+          const c=shipCells(x,y,SHIPS[i].len,h); if(!c||c.some(v=>used.has(v))) continue;
+          c.forEach(v=>used.add(v)); fleet.push({i,cells:c}); placed=true;
+        }
+        ok=placed;
+      }
+      if(ok) return fleet;
+    }
+  }
+  // answers for shots `fired` against `fleet`: string of m/h/s aligned with fired, plus sunk list
+  function answer(fleet, fired){
+    if(!fleet) return { ans:'', sunk:[] };
+    const owner={}; fleet.forEach(s=>s.cells.forEach(c=>owner[c]=s.i));
+    const left={}; fleet.forEach(s=>left[s.i]=s.cells.length);
+    let ans=''; const sunk=[];
+    fired.forEach(c=>{
+      if(owner[c]===undefined){ ans+='m'; return; }
+      const i=owner[c]; left[i]--; if(left[i]===0){ ans+='s'; sunk.push({i,cells:fleet.find(s=>s.i===i).cells}); } else ans+='h';
+    });
+    return { ans, sunk };
+  }
+  const hitsIn=a=>(a.match(/[hs]/g)||[]).length;
+
+  // ---------- opponent view ----------
+  function presentIds(){ const now=Date.now(), ids=[]; others.forEach((o,id)=>{ if(now-o.t<ALIVE_MS) ids.push(id); }); return ids.sort(); }
+  function order(){ // [first, second] seat ids
+    if (mode==='bot') return [myId,'bot'];
+    return presentIds().concat(conn?[myId]:[]).sort().slice(0,2);
+  }
+  function opp(){
+    if (mode==='bot'){ const a=answer(bot.fleet, me.fired); return { id:'bot', g:bot.g, ready:true, fired:bot.fired, ans:a.ans, sunk:a.sunk, fleet: over()?bot.fleet:null }; }
+    const ord=order(); if(!ord.includes(myId)) return null;
+    const oid=ord.find(i=>i!==myId); if(!oid) return null;
+    return Object.assign({id:oid}, others.get(oid));
+  }
+  function sameGame(o){ return o && o.g===me.g; }
+  function myAns(){ const o=opp(); return sameGame(o)? answer(me.fleet, o.fired) : {ans:'',sunk:[]}; }
+  function theirAns(){ const o=opp(); return sameGame(o)? (o.ans||'') : ''; }
+  function over(){ // 1 = I won, -1 = I lost, 0 = going
+    if(!me || !me.ready) return 0;
+    const o = mode==='bot' ? {g:bot.g, fired:bot.fired} : opp(); if(!sameGame(o)) return 0;
+    const mine = mode==='bot' ? answer(bot.fleet, me.fired).ans : (o.ans||'');
+    const theirs = answer(me.fleet, o.fired).ans;
+    if (hitsIn(mine)>=TOTAL) return 1;
+    if (hitsIn(theirs)>=TOTAL) return -1;
+    return 0;
+  }
+  function bothReady(){ const o=opp(); return me.ready && sameGame(o) && o.ready; }
+  function iAmFirst(){ const ord=order(); return ord.length===2 && ord[me.g%2]===myId; }
+  function myTurn(){
+    const o=opp(); if(!bothReady()||over()) return false;
+    return iAmFirst() ? me.fired.length===o.fired.length : me.fired.length<o.fired.length;
+  }
+
+  // ---------- network ----------
+  function pub(sub,obj,retain){ if(client&&conn) client.publish(base+'/'+sub, obj===null?'':JSON.stringify(obj), {qos:1, retain:!!retain}); }
+  function publishMe(){
+    if(mode!=='online'||!me) return;
+    const a=myAns(), ov=over();
+    pub('p/'+myId, { t:Date.now(), g:me.g, ready:me.ready, fired:me.fired, ans:a.ans, sunk:a.sunk, fleet: ov?me.fleet:null }, true);
+  }
+  function validIdxs(a){ if(!Array.isArray(a)||a.length>S*S) return false; const s=new Set(); for(const v of a){ if(!Number.isInteger(v)||v<0||v>=S*S||s.has(v)) return false; s.add(v);} return true; }
+  function validShips(a){ return Array.isArray(a) && a.length<=SHIPS.length && a.every(s=>s&&Number.isInteger(s.i)&&s.i>=0&&s.i<SHIPS.length&&validIdxs(s.cells)&&s.cells.length===SHIPS[s.i].len); }
+  function onMessage(topic,payload){
+    const sub=topic.slice(base.length+1), txt=payload.toString();
+    let d=null; if(txt){ try{ d=JSON.parse(txt); }catch(_){ return; } }
+    if(sub.startsWith('p/')){
+      const id=sub.slice(2); if(!/^[a-z0-9]{1,16}$/.test(id)||id===myId) return;
+      if(!d){ others.delete(id); }
+      else if(typeof d.t==='number' && Number.isInteger(d.g) && d.g>=0 && validIdxs(d.fired)){
+        const prev=others.get(id);
+        others.set(id,{ t:d.t, g:d.g, ready:!!d.ready, fired:d.fired, ans:typeof d.ans==='string'&&/^[mhs]*$/.test(d.ans)?d.ans:'', sunk:validShips(d.sunk)?d.sunk:[], fleet:validShips(d.fleet)?d.fleet:null });
+        const o=others.get(id);
+        if (o.g>me.g){ newGame(o.g, true); }
+        const changedFired = !prev || prev.fired.length!==o.fired.length || prev.g!==o.g;
+        if (changedFired) publishMe();   // re-answer their new shots
+      }
+      checkPeers(); update();
+    } else if(sub==='e' && d && d.from!==myId){
+      if(d.t==='react' && EMO.includes(d.e)) floatEmoji(d.e);
+    }
+  }
+  function checkPeers(){
+    const cur=new Set(presentIds());
+    cur.forEach(id=>{ if(!wasPresent.has(id)) toast('TA 来了 💕'); });
+    wasPresent.forEach(id=>{ if(!cur.has(id)) toast('TA 离开了房间'); });
+    wasPresent=cur; render();
+  }
+  function connect(c){
+    code=c; base=NS+'/'+c; others=new Map(); wasPresent=new Set(); conn=false;
+    client=mqtt.connect(BROKER,{ clientId:'bs_'+myId+'_'+Math.random().toString(36).slice(2,6), clean:true, keepalive:30, reconnectPeriod:2000, connectTimeout:10000,
+      will:{ topic:base+'/p/'+myId, payload:'', qos:1, retain:true } });
+    client.on('connect',()=>{ conn=true; client.subscribe(base+'/#',{qos:1}); publishMe(); render(); });
+    client.on('message',onMessage);
+    client.on('close',()=>{ conn=false; render(); });
+    client.on('offline',()=>{ conn=false; render(); });
+    client.on('error',()=>{});
+    hb=setInterval(publishMe,15000); tick=setInterval(checkPeers,5000);
+  }
+  function disconnect(){ clearInterval(hb); clearInterval(tick); if(client){ try{ if(conn) pub('p/'+myId,null,true); client.end(false); }catch(_){} } client=null; conn=false; }
+  window.addEventListener('pagehide',()=>{ if(client&&conn){ try{ pub('p/'+myId,null,true); }catch(_){} } });
+
+  // ---------- persistence ----------
+  const skey=()=>'bs-'+code;
+  function save(){ if(mode!=='online') return; try{ localStorage.setItem(skey(), JSON.stringify(me)); }catch(_){} }
+  function load(){ try{ const d=JSON.parse(localStorage.getItem(skey())||'null'); if(d&&Number.isInteger(d.g)&&Array.isArray(d.fired)) return d; }catch(_){} return null; }
+
+  // ---------- game flow ----------
+  function newGame(g, fromOpp){
+    me={ g, fleet:null, ready:false, fired:[] };
+    draft=[]; selShip=0; target=-1; seenMine=0; seenTheirs=0;
+    if(mode==='bot') bot={ g, fleet:randomFleet(), fired:[] };
+    $('modal').classList.add('hidden');
+    save(); publishMe(); render();
+    if(fromOpp) toast(oname()+' 开了新的一局，重新摆船吧');
+  }
+  function fire(){
+    if(target<0||!myTurn()||me.fired.includes(target)) return;
+    me.fired=me.fired.concat([target]); target=-1;
+    save(); publishMe(); update();
+  }
+  let botTimer=null;
+  function scheduleBot(){ if(botTimer) return; botTimer=setTimeout(()=>{ botTimer=null; botMove(); }, 800+Math.random()*700); }
+  function update(){
+    if(!me) return;
+    // announce results of my shots
+    const ta=theirAns();
+    if(mode==='bot'){ /* computed in theirAns via opp() */ }
+    while(seenTheirs<ta.length){
+      const r=ta[seenTheirs], cell=me.fired[seenTheirs]; seenTheirs++;
+      if(seenTheirs===ta.length){
+        if(r==='m') toast('落空了 🌊');
+        else if(r==='h') toast('命中！🔥');
+        else { const o=opp(); const s=(o.sunk||[]).find(x=>x.cells.includes(cell)); toast('击沉 '+oname()+' 的'+(s?SHIPS[s.i].n:'战舰')+'！💥'); }
+        flash('eBoard', cell);
+      }
+    }
+    const ma=myAns().ans;
+    while(seenMine<ma.length){
+      const r=ma[seenMine], o=opp(), cell=o.fired[seenMine]; seenMine++;
+      if(seenMine===ma.length && me.ready){
+        if(r==='h') toast(oname()+' 打中了你的船 😱');
+        else if(r==='s'){ const s=me.fleet.find(x=>x.cells.includes(cell)); toast('你的'+(s?SHIPS[s.i].n:'战舰')+'被击沉了 🥲'); }
+        flash('mBoard', cell);
+      }
+    }
+    render();
+    if(mode==='bot' && bothReady() && !over() && !myTurn()) scheduleBot();
+    const ov=over();
+    if(ov && overShown!==me.g){
+      overShown=me.g; publishMe();
+      setTimeout(()=>{
+        if(ov>0){ modal('你赢了！','把 '+oname()+' 的舰队全部击沉 🎉',[{label:'看看战场'},{label:'再来一局',primary:true,fn:()=>newGame(me.g+1)}]); burst('🎉'); }
+        else { modal(oname()+' 赢了','你的舰队全军覆没… 下局报仇！',[{label:'看看战场'},{label:'再来一局',primary:true,fn:()=>newGame(me.g+1)}]); burst('🥲'); }
+      }, 700);
+    }
+  }
+  function flash(boardId, cell){ requestAnimationFrame(()=>{ const el=$(boardId).children[cell]; if(el){ el.classList.remove('boom'); void el.offsetWidth; el.classList.add('boom'); } }); }
+
+  // ---------- bot AI ----------
+  function botMove(){
+    if(mode!=='bot'||over()) return;
+    if(!bothReady()||myTurn()) return;
+    const res=answer(me.fleet, bot.fired);
+    const sunkCells=new Set(res.sunk.flatMap(s=>s.cells));
+    const fired=new Set(bot.fired);
+    const hits=bot.fired.filter((c,i)=>res.ans[i]!=='m' && !sunkCells.has(c));
+    const free=c=>c>=0&&c<S*S&&!fired.has(c);
+    const nb=c=>{ const x=c%S,y=Math.floor(c/S), r=[]; if(x>0) r.push(c-1); if(x<S-1) r.push(c+1); if(y>0) r.push(c-S); if(y<S-1) r.push(c+S); return r; };
+    let cands=[];
+    if(hits.length){
+      if(hits.length>=2){
+        const hs=new Set(hits);
+        hits.forEach(h=>{
+          const x=h%S, y=Math.floor(h/S);
+          if(hs.has(h+1)&&x<S-1||hs.has(h-1)&&x>0){ // horizontal line
+            let a=h; while(a%S>0&&hs.has(a-1)) a--; let b=h; while(b%S<S-1&&hs.has(b+1)) b++;
+            if(a%S>0&&free(a-1)) cands.push(a-1); if(b%S<S-1&&free(b+1)) cands.push(b+1);
+          }
+          if(hs.has(h+S)||hs.has(h-S)){
+            let a=h; while(a>=S&&hs.has(a-S)) a-=S; let b=h; while(b<S*S-S&&hs.has(b+S)) b+=S;
+            if(a>=S&&free(a-S)) cands.push(a-S); if(b<S*S-S&&free(b+S)) cands.push(b+S);
+          }
+        });
+      }
+      if(!cands.length) hits.forEach(h=>nb(h).forEach(c=>{ if(free(c)) cands.push(c); }));
+    }
+    if(!cands.length){ for(let c=0;c<S*S;c++) if(free(c) && ((c%S)+Math.floor(c/S))%2===0) cands.push(c); }
+    if(!cands.length){ for(let c=0;c<S*S;c++) if(free(c)) cands.push(c); }
+    const pick=cands[Math.floor(Math.random()*cands.length)];
+    bot.fired=bot.fired.concat([pick]);
+    update();
+  }
+
+  // ---------- render ----------
+  function cells(board, n){ if(board.children.length===n) return; board.innerHTML=''; for(let i=0;i<n;i++){ const b=document.createElement('button'); b.className='c'; b.dataset.i=i; board.appendChild(b); } }
+  function chip(s, cls){ return '<div class="chip '+cls+'" data-i="'+s.i+'">'+SHIPS[s.i].n+'<span class="bar">'+'<i></i>'.repeat(SHIPS[s.i].len)+'</span></div>'; }
+  function render(){
+    if(!me) return;
+    const online=mode==='online', o=opp();
+    if(online){ $('roomtag').innerHTML='<span class="dot '+(conn&&presentIds().length?'on':'')+'"></span>房间 <b></b>'; $('roomtag').querySelector('b').textContent=code; }
+    else $('roomtag').textContent='和电脑练手';
+    $('copy').classList.toggle('hidden',!online); $('reacts').classList.toggle('hidden',!online);
+    const placing=!me.ready;
+    $('place').classList.toggle('hidden',!placing); $('battle').classList.toggle('hidden',placing);
+    if(placing) renderPlace(); else renderBattle(o);
+  }
+  function renderPlace(){
+    const used={}; draft.forEach(s=>s.cells.forEach(c=>used[c]=s.i));
+    $('pShips').innerHTML=SHIPS.map((s,i)=>chip({i}, (draft.some(d=>d.i===i)?'placed ':'')+(i===selShip?'sel':''))).join('');
+    const b=$('pBoard'); cells(b,S*S);
+    [...b.children].forEach((el,i)=>{ el.className='c'+(used[i]!==undefined?' ship'+(used[i]===selShip?' sel':''):''); });
+    $('rot').textContent=horiz?'↻ 横着放':'↻ 竖着放';
+    $('ready').disabled=draft.length<SHIPS.length;
+    const left=SHIPS.length-draft.length;
+    $('pStatus').textContent = left ? (selShip>=0 && !draft.some(d=>d.i===selShip) ? '放下你的'+SHIPS[selShip].n+'（'+SHIPS[selShip].len+' 格）' : '还有 '+left+' 艘船没放') : '舰队就位，点「准备好了」';
+  }
+  function renderBattle(o){
+    const ta=theirAns(), ov=over(), turn=myTurn();
+    const st=$('status'); st.className='status';
+    const og = sameGame(o);
+    if(mode==='online' && !conn) st.textContent='连接中…';
+    else if(!o) st.textContent='等待 TA 输入房间号 '+code+' 进来…';
+    else if(!og || !o.ready) st.textContent='等 '+oname()+' 摆好舰队…';
+    else if(ov>0){ st.textContent='你赢了 🎉'; st.className='status go'; }
+    else if(ov<0) st.textContent=oname()+' 赢了';
+    else if(turn){ st.textContent='轮到你开炮！'; st.className='status go'; }
+    else st.textContent=oname()+' 正在瞄准…';
+
+    // enemy board
+    const eb=$('eBoard'); cells(eb,S*S);
+    const oppSunk=(og&&o.sunk)||[]; const sunkSet=new Set(oppSunk.flatMap(s=>s.cells));
+    const revealSet=new Set(og&&o.fleet?o.fleet.flatMap(s=>s.cells):[]);
+    const res={}; me.fired.forEach((c,i)=>res[c]= i<ta.length?ta[i]:'p');
+    [...eb.children].forEach((el,i)=>{
+      let cls='c';
+      if(sunkSet.has(i)) cls+=' sunk';
+      else if(res[i]==='h'||res[i]==='s') cls+=' hit';
+      else if(res[i]==='m') cls+=' miss';
+      else if(res[i]==='p') cls+=' pend';
+      else if(revealSet.has(i)) cls+=' reveal';
+      else if(i===target && turn) cls+=' target';
+      if(el.className.replace(' boom','')!==cls) el.className=cls+(el.classList.contains('boom')?' boom':'');
+    });
+    eb.classList.toggle('myturn',turn); eb.classList.toggle('locked',!turn);
+    $('eShips').innerHTML=SHIPS.map((s,i)=>chip({i}, oppSunk.some(x=>x.i===i)?'dead':'')).join('');
+    $('enemyLeft').textContent='剩 '+(SHIPS.length-oppSunk.length)+' 艘';
+    $('enemyTitle').textContent=oname()+'的海域';
+    $('fire').disabled=!(turn && target>=0);
+    $('fire').textContent = turn ? (target>=0?'开火！':'点上面的海域选目标') : '开火';
+
+    // my board
+    const mb=$('mBoard'); cells(mb,S*S);
+    const ma=myAns(); const oFired=og?o.fired:[];
+    const mySunk=new Set(ma.sunk.flatMap(s=>s.cells));
+    const mres={}; oFired.forEach((c,i)=>mres[c]=ma.ans[i]);
+    const shipSet=new Set(me.fleet.flatMap(s=>s.cells));
+    [...mb.children].forEach((el,i)=>{
+      let cls='c';
+      if(mySunk.has(i)) cls+=' sunk';
+      else if(mres[i]==='h') cls+=' hit';
+      else if(mres[i]==='m') cls+=' miss';
+      else if(shipSet.has(i)) cls+=' ship';
+      if(el.className.replace(' boom','')!==cls) el.className=cls+(el.classList.contains('boom')?' boom':'');
+    });
+    $('myLeft').textContent='剩 '+(SHIPS.length-ma.sunk.length)+' 艘';
+    $('again').textContent = ov ? '再来一局' : '重开一局';
+  }
+
+  // ---------- placement input ----------
+  $('pShips').addEventListener('click',e=>{ const c=e.target.closest('.chip'); if(!c) return; const i=+c.dataset.i; const k=draft.findIndex(d=>d.i===i); if(k>=0) draft.splice(k,1); selShip=i; render(); });
+  $('pBoard').addEventListener('click',e=>{
+    const el=e.target.closest('.c'); if(!el) return; const p=+el.dataset.i;
+    const k=draft.findIndex(d=>d.cells.includes(p));
+    if(k>=0){ selShip=draft[k].i; draft.splice(k,1); render(); return; }
+    if(selShip<0 || draft.some(d=>d.i===selShip)){ selShip=SHIPS.findIndex((_,i)=>!draft.some(d=>d.i===i)); if(selShip<0) return; }
+    const len=SHIPS[selShip].len; let x=p%S, y=Math.floor(p/S);
+    if(horiz) x=Math.min(x,S-len); else y=Math.min(y,S-len);
+    const c=shipCells(x,y,len,horiz); const used=new Set(draft.flatMap(d=>d.cells));
+    if(!c || c.some(v=>used.has(v))){ toast('这里放不下'); return; }
+    draft.push({i:selShip,cells:c});
+    selShip=SHIPS.findIndex((_,i)=>!draft.some(d=>d.i===i));
+    render();
+  });
+  $('rot').onclick=()=>{ horiz=!horiz; render(); };
+  $('rnd').onclick=()=>{ draft=randomFleet(); selShip=-1; render(); };
+  $('clr').onclick=()=>{ draft=[]; selShip=0; render(); };
+  $('ready').onclick=()=>{
+    if(draft.length<SHIPS.length) return;
+    me.fleet=draft.map(d=>({i:d.i,cells:d.cells.slice()})).sort((a,b)=>a.i-b.i); me.ready=true;
+    save(); publishMe(); update();
+  };
+
+  // ---------- battle input ----------
+  $('eBoard').addEventListener('click',e=>{
+    const el=e.target.closest('.c'); if(!el||!myTurn()) return; const p=+el.dataset.i;
+    if(me.fired.includes(p)) return;
+    if(target===p){ fire(); return; }
+    target=p; render();
+  });
+  $('fire').onclick=fire;
+  $('again').onclick=()=>{
+    if(over()) newGame(me.g+1);
+    else modal('重开一局？','这局会作废，双方重新摆船',[{label:'取消'},{label:'重开',primary:true,fn:()=>newGame(me.g+1)}]);
+  };
+
+  // ---------- misc ----------
+  $('reacts').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; const n=Date.now(); if(n-(b._t||0)<400) return; b._t=n; floatEmoji(b.textContent); pub('e',{t:'react',e:b.textContent,from:myId}); });
+  $('copy').onclick=()=>{ const link=location.origin+location.pathname+'#'+code; const txt='来玩海战棋！打开 '+link+' ，房间号：'+code; try{ navigator.clipboard.writeText(txt).then(()=>toast('邀请已复制，发给 TA 吧'),()=>toast('房间号：'+code)); }catch(_){ toast('房间号：'+code); } };
+  $('leave').onclick=()=>{ disconnect(); mode=null; me=null; bot=null; $('modal').classList.add('hidden'); try{ history.replaceState(null,'',location.pathname); }catch(_){} $('game').classList.add('hidden'); $('lobby').classList.remove('hidden'); };
+
+  const clean=v=>(v||'').toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,12);
+  $('code').addEventListener('input',e=>{ const c=clean(e.target.value); if(c!==e.target.value) e.target.value=c; });
+  $('code').addEventListener('keydown',e=>{ if(e.key==='Enter') $('join').click(); });
+  $('rand').onclick=()=>{ const a='abcdefghjkmnpqrstuvwxyz23456789'; let s=''; for(let i=0;i<6;i++) s+=a[Math.floor(Math.random()*a.length)]; $('code').value=s; };
+  function show(){ $('lobby').classList.add('hidden'); $('game').classList.remove('hidden'); }
+  $('bot').onclick=()=>{ mode='bot'; code=''; overShown=-1; show(); newGame(0); };
+  $('join').onclick=()=>{
+    const c=clean($('code').value); if(!c){ toast('先输入一个房间号'); $('code').focus(); return; }
+    if(!window.mqtt){ toast('联机组件没加载出来，刷新试试'); return; }
+    mode='online'; code=c; overShown=-1; show();
+    const saved=load();
+    if(saved){ me=saved; draft=me.fleet?me.fleet.map(s=>({i:s.i,cells:s.cells.slice()})):[]; selShip=draft.length?-1:0; seenMine=0; seenTheirs=0; }
+    else { me={g:0,fleet:null,ready:false,fired:[]}; draft=[]; selShip=0; }
+    connect(c); render();
+    try{ history.replaceState(null,'','#'+c); }catch(_){}
+  };
+  const h=clean(location.hash.slice(1)); if(h) $('code').value=h;
+})();
+</script>
+</body>
+</html>
