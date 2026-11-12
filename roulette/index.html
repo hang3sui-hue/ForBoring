@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>俄罗斯轮盘 · ForBoring</title>
+<link rel="stylesheet" href="../common.css">
+<style>
+  .stage{background:#2b2420;border-radius:22px;padding:18px 16px 16px;text-align:center;color:#f6efe6;position:relative;overflow:hidden}
+  .players{display:flex;justify-content:space-between;gap:10px;margin-bottom:6px}
+  .pl{flex:1;padding:8px 10px;border-radius:12px;background:rgba(255,255,255,.07);font-size:14px;border:1.5px solid transparent;transition:border-color .2s}
+  .pl.turn{border-color:var(--accent);background:rgba(217,88,107,.18)}
+  .pl.dead{opacity:.45;text-decoration:line-through}
+  .pl small{display:block;font-size:11px;color:#bfae9c;margin-top:2px}
+  #cyl{width:210px;height:210px;margin:6px auto 0;display:block}
+  #cylG{transition:transform .9s cubic-bezier(.2,.8,.2,1);transform-origin:105px 105px}
+  .spin #cylG{transition:transform 1.2s cubic-bezier(.15,.7,.2,1)}
+  .info{font-size:13px;color:#d8c8b6;margin-top:6px;min-height:18px}
+  .prob{font-size:12px;color:#bfae9c;margin-top:2px}
+  .sizes{display:flex;gap:8px;justify-content:center;margin-top:10px}
+  .sizes button{padding:6px 12px;font-size:13px;border-radius:20px;background:transparent;border:1.5px solid #5a4b40;color:#d8c8b6}
+  .sizes button.on{border-color:var(--accent);color:#fff;background:rgba(217,88,107,.25)}
+  .acts{display:flex;gap:10px;margin-top:12px}
+  .acts button{flex:1;padding:16px 8px;font-size:16px}
+  .acts .opp{background:#2b2420;color:#fff}
+  .rule{font-size:12px;color:var(--muted);text-align:center;margin-top:8px;line-height:1.6}
+  .log{display:flex;flex-direction:column;gap:4px;margin-top:12px;font-size:13px;color:var(--muted)}
+  .log div b{color:var(--ink);font-weight:500}
+  .flash{position:fixed;inset:0;background:radial-gradient(circle,#fff 0%,#ffd27a 30%,rgba(224,69,90,.85) 70%);z-index:90;pointer-events:none;animation:flash .9s ease-out forwards}
+  @keyframes flash{0%{opacity:0}8%{opacity:1}100%{opacity:0}}
+  .bang{position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);font-family:"Songti SC","STSong",serif;font-size:96px;font-weight:700;color:#fff;text-shadow:0 4px 30px rgba(0,0,0,.4);z-index:91;pointer-events:none;animation:bang 1.1s ease-out forwards}
+  @keyframes bang{0%{transform:translate(-50%,-50%) scale(.3)}35%{transform:translate(-50%,-50%) scale(1.25)}100%{transform:translate(-50%,-50%) scale(1);opacity:0}}
+  .click{animation:click .35s ease-out}
+  @keyframes click{30%{transform:translateX(-6px)}60%{transform:translateX(5px)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section id="lobby">
+    <a class="back" href="../">‹ 返回主页</a>
+    <h1>俄罗斯轮盘</h1>
+    <p class="sub">六个弹膛，一发实弹。轮流扣扳机——可以朝自己，也可以朝 TA。朝自己是空的还能再来一次，朝 TA 是空的就换 TA。</p>
+    <div class="card">
+      <label for="code">房间号（字母或数字）</label>
+      <div class="row">
+        <input id="code" maxlength="12" placeholder="比如 love520" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <button id="rand" class="ghost">🎲</button>
+      </div>
+      <button id="join" class="primary block">进入房间</button>
+      <div class="divider">或者</div>
+      <button id="local" class="ghost block" style="margin-top:6px">先和电脑玩</button>
+    </div>
+  </section>
+
+  <section id="game" class="hidden">
+    <div class="topbar">
+      <div class="roomtag" id="roomtag"></div>
+      <div class="row" style="gap:6px">
+        <button id="copy" class="ghost small">复制邀请</button>
+        <button id="leave" class="ghost small">离开</button>
+      </div>
+    </div>
+
+    <div class="stage" id="stage">
+      <div class="players"><div class="pl" id="p0"></div><div class="pl" id="p1"></div></div>
+      <svg id="cyl" viewBox="0 0 210 210">
+        <defs>
+          <radialGradient id="steel" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#9aa3ab"/><stop offset=".6" stop-color="#5c656d"/><stop offset="1" stop-color="#3a4046"/></radialGradient>
+          <radialGradient id="hole" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#0d0f11"/><stop offset="1" stop-color="#2a2f34"/></radialGradient>
+          <radialGradient id="brass" cx="40%" cy="35%" r="65%"><stop offset="0" stop-color="#f7dd8f"/><stop offset=".6" stop-color="#c9963a"/><stop offset="1" stop-color="#8a6420"/></radialGradient>
+        </defs>
+        <polygon points="105,4 99,16 111,16" fill="var(--accent)"/>
+        <g id="cylG">
+          <circle cx="105" cy="105" r="86" fill="url(#steel)" stroke="#2a2f34" stroke-width="2"/>
+          <g id="holes"></g>
+          <circle cx="105" cy="105" r="13" fill="#3a4046" stroke="#22272b" stroke-width="2"/>
+        </g>
+      </svg>
+      <div class="info" id="info"></div>
+      <div class="prob" id="prob"></div>
+      <div class="sizes" id="sizes"><button data-b="1">1 发实弹</button><button data-b="2">2 发实弹</button></div>
+    </div>
+
+    <div class="status" id="status"></div>
+    <div class="acts">
+      <button id="shootSelf" class="primary">🔫 朝自己开</button>
+      <button id="shootOpp" class="opp">🎯 朝 TA 开</button>
+    </div>
+    <div class="rule">朝自己开空了：你再来一次　·　朝 TA 开空了：换 TA</div>
+    <div class="log" id="log"></div>
+    <div class="row" style="margin-top:12px"><button id="again" class="ghost" style="flex:1">重开一局</button></div>
+    <div class="reacts" id="reacts"></div>
+  </section>
+</div>
+
+<div id="modal" class="modal hidden"><div class="card"><h3 id="mT"></h3><p id="mP"></p><div class="row" id="mBtns"></div></div></div>
+<div id="toast" class="toast"></div>
+
+<script src="../common.js"></script>
+<script src="../mqtt.min.js"></script>
+<script>
+(() => {
+  const ui=FB.ui, $=id=>document.getElementById(id), N=6;
+  let mode=null, net=null, code='', st=null, shownLog=0, animating=false, endShown='';
+
+  const ME=()=> mode==='bot' ? 'me' : net.myId;
+  const nameOf=id=> id==='bot' ? '电脑' : (id===ME() ? '你' : (net?net.nameOf(id):'TA'));
+  const otherOf=id=> st.players[0]===id ? st.players[1] : st.players[0];
+  const turnId=()=> st ? st.players[st.turn] : null;
+
+  // bullets hidden in an encoded string
+  const enc=(arr,g)=>arr.map(b=>((b+11)*13+g*7).toString(36)).join('.');
+  const dec=(k,g)=>String(k).split('.').map(x=>(parseInt(x,36)-g*7)/13-11).filter(b=>Number.isInteger(b)&&b>=0&&b<N);
+  function fresh(game, bullets, players){
+    const set=new Set(); while(set.size<bullets) set.add(Math.floor(Math.random()*N));
+    return { game, v:0, n:bullets, k:enc([...set],game), pos:0, turn:game%2, players, log:[], loser:null };
+  }
+  function valid(s){
+    return s && Number.isInteger(s.game) && Number.isInteger(s.v) && (s.n===1||s.n===2) && typeof s.k==='string' && Number.isInteger(s.pos) && s.pos>=0 && s.pos<=N
+      && (s.turn===0||s.turn===1) && Array.isArray(s.players) && s.players.length===2 && Array.isArray(s.log) && s.log.length<=N;
+  }
+  const newer=s=>!st||s.game>st.game||(s.game===st.game&&s.v>st.v);
+  function commit(s){ const prev=st; st=s; if(mode==='online') net.setState(s); onNewState(prev); }
+
+  // ---- actions ----
+  function shoot(target){
+    if(!st||st.loser||animating||turnId()!==ME()) return;
+    const s=JSON.parse(JSON.stringify(st)), bullets=dec(s.k,s.game), hit=bullets.includes(s.pos);
+    const tgt = target==='self' ? ME() : otherOf(ME());
+    s.log.push({ by:ME(), t:tgt, hit }); s.pos++; s.v++;
+    if(hit) s.loser=tgt;
+    else if(target!=='self') s.turn=1-s.turn;
+    commit(s);
+  }
+  function restart(n){
+    const players = mode==='bot' ? ['me','bot'] : net.order();
+    if(players.length<2){ ui.toast('等 TA 进来再开'); return; }
+    shownLog=0; endShown='';
+    commit(fresh((st?st.game:-1)+1, n || (st?st.n:1), players));
+  }
+  function setBullets(n){ if(!st||st.log.length||st.loser) return; const s=fresh(st.game,n,st.players); s.v=st.v+1; commit(s); }
+
+  // ---- animation when a new shot appears ----
+  function onNewState(prev){
+    if(prev && st.game!==prev.game){ shownLog=0; endShown=''; ui.close(); }
+    if(st.log.length>shownLog){
+      const e=st.log[st.log.length-1]; shownLog=st.log.length; animating=true;
+      const shooter=nameOf(e.by), target = e.t===e.by ? (e.by===ME()?'自己':'自己') : (e.t===ME()?'你':nameOf(e.t));
+      $('status').className='status'; $('status').textContent = shooter+' 把枪对准了'+target+'…';
+      drawHoles(st.pos-1, true);                      // rotate to the chamber being fired, keep it hidden
+      setTimeout(()=>{
+        animating=false;
+        if(e.hit){
+          const f=document.createElement('div'); f.className='flash'; document.body.appendChild(f); setTimeout(()=>f.remove(),1000);
+          const b=document.createElement('div'); b.className='bang'; b.textContent='砰！'; document.body.appendChild(b); setTimeout(()=>b.remove(),1200);
+          try{ navigator.vibrate&&navigator.vibrate([100,50,220]); }catch(_){}
+        } else {
+          $('stage').classList.remove('click'); void $('stage').offsetWidth; $('stage').classList.add('click');
+          ui.toast('咔……空的 😮‍💨');
+          try{ navigator.vibrate&&navigator.vibrate(25); }catch(_){}
+        }
+        render(); botMaybe(); endMaybe();
+      }, 1300);
+      render(true);
+    } else { render(); botMaybe(); endMaybe(); }
+  }
+  function endMaybe(){
+    if(!st||!st.loser||animating) return; const key=st.game+':'+st.v; if(endShown===key) return; endShown=key;
+    const meLost=st.loser===ME();
+    setTimeout(()=>{
+      ui.modal(meLost?'你中弹了 😵':nameOf(st.loser)+' 中弹了 😵', meLost?'下一局小心点':'你活下来了 😎', [{label:'看看'},{label:'再来一局',primary:true,fn:()=>restart()}]);
+      if(!meLost) ui.burst('😎');
+    }, 600);
+  }
+
+  // ---- bot: knows the odds, not the bullets ----
+  let botT=null;
+  function botMaybe(){
+    if(mode!=='bot'||!st||st.loser||animating||turnId()!=='bot'||botT) return;
+    botT=setTimeout(()=>{
+      botT=null; if(!st||st.loser||turnId()!=='bot') return;
+      const left=N-st.pos, live=st.n-st.log.filter(x=>x.hit).length, p=live/left;
+      const target = p>=0.5 ? 'opp' : (p<=0.2 ? 'self' : (Math.random()<0.5?'self':'opp'));
+      const s=JSON.parse(JSON.stringify(st)), hit=dec(s.k,s.game).includes(s.pos);
+      const tgt = target==='self' ? 'bot' : 'me';
+      s.log.push({by:'bot',t:tgt,hit}); s.pos++; s.v++;
+      if(hit) s.loser=tgt; else if(target!=='self') s.turn=1-s.turn;
+      commit(s);
+    }, 1100+Math.random()*900);
+  }
+
+  // ---- render ----
+  function drawHoles(focus, hideFocus){
+    const g=$('holes'); g.innerHTML='';
+    const fired=st?st.pos:0, bullets=st?dec(st.k,st.game):[];
+    for(let i=0;i<N;i++){
+      const a=(i*60-90)*Math.PI/180, x=105+Math.cos(a)*52, y=105+Math.sin(a)*52;
+      const used=i<fired && !(hideFocus && i===focus), shownHit=used && st.log[i] && st.log[i].hit;
+      let c=`<circle cx="${x}" cy="${y}" r="21" fill="url(#hole)" stroke="#22272b" stroke-width="2"/>`;
+      if(!used) c+=`<circle cx="${x}" cy="${y}" r="15" fill="#4a5157" opacity=".55"/>`;   // unknown
+      if(shownHit) c+=`<circle cx="${x}" cy="${y}" r="15" fill="url(#brass)"/><circle cx="${x}" cy="${y}" r="5" fill="#8a6420"/>`;
+      if(st&&st.loser&&!used&&bullets.includes(i)) c+=`<circle cx="${x}" cy="${y}" r="15" fill="url(#brass)" opacity=".8"/>`; // reveal leftovers
+      g.innerHTML+=c;
+    }
+    const at = focus!=null ? focus : Math.min(fired,N-1);
+    $('stage').classList.toggle('spin', focus!=null);
+    $('cylG').style.transform=`rotate(${-at*60 - (st?st.game*360:0)}deg)`;
+  }
+  function render(keepStatus){
+    ui.roomTag(mode==='online'?net:null, code, '和电脑玩');
+    $('copy').classList.toggle('hidden', mode!=='online'); $('reacts').classList.toggle('hidden', mode!=='online');
+    if(!st){
+      $('status').className='status'; $('status').textContent = mode==='online'&&!net.connected() ? '连接中…' : '等待 TA 输入房间号 '+code+' 进来…';
+      $('p0').textContent=''; $('p1').textContent=''; $('shootSelf').disabled=$('shootOpp').disabled=true; drawHoles(); return;
+    }
+    if(!animating) drawHoles();
+    st.players.forEach((id,i)=>{ const el=$('p'+i); el.innerHTML=''; el.appendChild(document.createTextNode(nameOf(id))); const sm=document.createElement('small'); sm.textContent = st.loser===id ? '中弹 😵' : (st.turn===i&&!st.loser ? '拿着枪' : '等待'); el.appendChild(sm); el.classList.toggle('turn', st.turn===i&&!st.loser); el.classList.toggle('dead', st.loser===id); });
+    const left=N-st.pos, live=st.n-st.log.filter(x=>x.hit).length;
+    $('info').textContent = st.loser ? '这局结束了' : '还剩 '+left+' 发 · 其中 '+live+' 发实弹';
+    $('prob').textContent = st.loser||!left ? '' : '下一发是实弹的概率 '+Math.round(live/left*100)+'%';
+    document.querySelectorAll('#sizes button').forEach(b=>b.classList.toggle('on', +b.dataset.b===st.n));
+    $('sizes').classList.toggle('hidden', st.log.length>0 || !!st.loser);
+    const mine=turnId()===ME() && !st.loser && !animating;
+    $('shootSelf').disabled=$('shootOpp').disabled=!mine;
+    $('shootOpp').textContent='🎯 朝 '+(mode==='bot'?'电脑':(net?net.nameOf(otherOf(ME())):'TA'))+' 开';
+    if(!keepStatus && !animating){
+      const s=$('status'); s.className='status';
+      if(st.loser) s.textContent = nameOf(st.loser)+' 中弹了';
+      else if(mine){ s.textContent='轮到你了，枪口朝哪？'; s.className='status go'; }
+      else s.textContent=nameOf(turnId())+' 正在犹豫…';
+    }
+    $('log').innerHTML='';
+    st.log.slice().reverse().forEach(e=>{
+      const d=document.createElement('div'), self=e.t===e.by;
+      d.textContent = nameOf(e.by)+(self?' 朝自己开了一枪：':' 朝 '+nameOf(e.t)+' 开了一枪：')+(e.hit?'砰！💥':'咔，空的');
+      if(st.log.indexOf(e)===st.log.length-1 && animating) d.textContent = nameOf(e.by)+(self?' 朝自己开了一枪…':' 朝 '+nameOf(e.t)+' 开了一枪…');
+      $('log').appendChild(d);
+    });
+    $('again').textContent = st.loser ? '再来一局' : '重开一局';
+  }
+
+  // ---- input ----
+  $('shootSelf').onclick=()=>shoot('self');
+  $('shootOpp').onclick=()=>shoot('opp');
+  $('sizes').addEventListener('click',e=>{ const b=e.target.closest('button'); if(b) setBullets(+b.dataset.b); });
+  $('again').onclick=()=>{ if(!st||st.loser||!st.log.length) restart(); else ui.modal('重开一局？','重新装弹',[{label:'取消'},{label:'重开',primary:true,fn:()=>restart()}]); };
+  $('copy').onclick=()=>ui.copyInvite(code,'俄罗斯轮盘');
+  $('leave').onclick=()=>{ const back='../'+(mode==='online'?'#'+code:''); if(net) net.close(); location.href=back; };
+  ui.reacts(()=>net);
+
+  function show(){ $('lobby').classList.add('hidden'); $('game').classList.remove('hidden'); }
+  ui.lobby({
+    onJoin(c){
+      mode='online'; code=c; show();
+      net=FB.net('roulette', c, {
+        onConn(){ render(); },
+        onPeers(joined,left){
+          joined.forEach(i=>ui.toast(net.nameOf(i)+' 来了 💕')); left.forEach(i=>ui.toast(net.nameOf(i)+' 离开了房间'));
+          if(joined.length && st) net.setState(st);
+          if(!st && net.order().length===2 && net.order()[0]===net.myId) restart(1);
+          render();
+        },
+        onState(s){ if(valid(s)&&newer(s)){ const prev=st; if(!prev) shownLog=s.log.length; st=s; onNewState(prev); } },
+        onEvent(d){ if(d.t==='react' && ui.EMO.includes(d.e)) ui.float(d.e); }
+      });
+      render();
+    },
+    onLocal(){ mode='bot'; code=''; show(); restart(1); }
+  });
+})();
+</script>
+</body>
+</html>

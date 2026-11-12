@@ -90,6 +90,7 @@
     <a class="game" data-g="battleship" href="battleship/"><div class="ic">⚓️</div><div class="nm">海战棋</div><div class="ds">经典版 · 偷偷摆船，轮流开炮</div></a>
     <a class="game" data-g="bomb" href="bomb/"><div class="ic">💣</div><div class="nm">数字炸弹</div><div class="ds">轮流猜数，范围越来越小 · 猜中就炸</div></a>
     <a class="game" data-g="jenga" href="jenga/"><div class="ic">🧱</div><div class="nm">抽积木</div><div class="ds">按住慢慢抽，塔会晃 · 谁弄倒谁输</div></a>
+    <a class="game" data-g="roulette" href="roulette/"><div class="ic">🔫</div><div class="nm">俄罗斯轮盘</div><div class="ds">朝自己还是朝 TA？赌一把运气</div></a>
     <div class="game soon"><span class="tag">即将上线</span><div class="ic">🎨</div><div class="nm">你画我猜</div><div class="ds">一个画一个猜</div></div>
     <div class="game soon"><span class="tag">即将上线</span><div class="ic">💞</div><div class="nm">默契大考验</div><div class="ds">同一道题，看你们选得一不一样</div></div>
   </div>
@@ -105,7 +106,7 @@
 <script>
 (() => {
   const BROKER='wss://broker-cn.emqx.io:8084/mqtt', ALIVE_MS=45000;
-  const GAMES={ gomoku:'五子棋', rps:'石头剪刀布', battleship:'海战棋', bomb:'数字炸弹', jenga:'抽积木', hub:'主页' };
+  const GAMES={ gomoku:'五子棋', rps:'石头剪刀布', battleship:'海战棋', bomb:'数字炸弹', jenga:'抽积木', roulette:'俄罗斯轮盘', hub:'主页' };
   const $=id=>document.getElementById(id);
   const myId=FB.id();
   let client=null, base='', conn=false, peers=new Map(), hb=null, tick=null, code='', wasPresent=new Set();
