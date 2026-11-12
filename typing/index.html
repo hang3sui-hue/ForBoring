@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>打字比赛 · ForBoring</title>
+<link rel="stylesheet" href="../common.css?v=1794503478">
+<style>
+  .cats{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:10px}
+  .cats button{padding:6px 12px;font-size:13px;border-radius:20px;background:transparent;border:1.5px solid var(--line)}
+  .cats button.on{border-color:var(--accent);color:var(--accent)}
+  .racers{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:12px 14px}
+  .racer{margin:6px 0}
+  .racer .top{display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px}
+  .racer .top span{color:var(--muted)}
+  .track{position:relative;height:12px;border-radius:8px;background:#efe5d8;overflow:visible}
+  .track i{position:absolute;left:0;top:0;bottom:0;border-radius:8px;background:linear-gradient(90deg,#f0a35e,var(--accent));transition:width .15s}
+  .track.opp i{background:linear-gradient(90deg,#8fc3e8,#4a86b8)}
+  .track b{position:absolute;top:-9px;font-size:20px;transition:left .15s;transform:translateX(-50%) scaleX(-1)}
+  .text{margin-top:12px;background:#fff;border:1.5px solid var(--line);border-radius:16px;padding:16px;font-size:21px;line-height:1.9;letter-spacing:1px;word-break:break-all;min-height:110px;font-family:"Songti SC","STSong",serif}
+  .text.en{font-family:Georgia,serif;font-size:19px;letter-spacing:.5px}
+  .text span{border-radius:3px}
+  .text .ok{color:#3f9d6b}
+  .text .bad{color:#fff;background:#e0455a}
+  .text .cur{box-shadow:inset 0 -3px 0 var(--accent)}
+  .text .todo{color:#b8aa9b}
+  textarea{width:100%;margin-top:10px;font:inherit;font-size:18px;padding:12px 14px;border-radius:14px;border:1.5px solid var(--line);background:#fff;resize:none;height:70px;outline:none}
+  textarea:focus{border-color:var(--accent)}
+  textarea:disabled{background:#f4ede4}
+  .count{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;font-family:"Songti SC","STSong",serif;font-size:120px;font-weight:700;color:var(--accent);background:rgba(246,239,230,.7);z-index:80;pointer-events:none}
+  .stats{display:flex;justify-content:space-around;margin-top:10px;font-size:12px;color:var(--muted);text-align:center}
+  .stats b{display:block;font-size:20px;color:var(--ink);font-weight:600}
+  table.res{width:100%;border-collapse:collapse;margin:4px 0 14px;font-size:14px}
+  table.res td,table.res th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:center}
+  table.res th{color:var(--muted);font-weight:400;font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section id="lobby">
+    <a class="back" href="../">‹ 返回主页</a>
+    <h1>打字比赛</h1>
+    <p class="sub">同一段文字，倒数 3 秒一起开打。打错的字要删掉重打，谁先打完谁赢，进度条能实时看到对方打到哪了。</p>
+    <div class="card">
+      <label for="code">房间号（字母或数字）</label>
+      <div class="row">
+        <input id="code" maxlength="12" placeholder="比如 love520" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <button id="rand" class="ghost">🎲</button>
+      </div>
+      <button id="join" class="primary block">进入房间</button>
+      <div class="divider">或者</div>
+      <button id="local" class="ghost block" style="margin-top:6px">自己练习</button>
+    </div>
+  </section>
+
+  <section id="game" class="hidden">
+    <div class="topbar">
+      <div class="roomtag" id="roomtag"></div>
+      <div class="row" style="gap:6px">
+        <button id="copy" class="ghost small">复制邀请</button>
+        <button id="leave" class="ghost small">离开</button>
+      </div>
+    </div>
+    <div class="cats" id="cats"><button data-c="0">绕口令</button><button data-c="1">古诗</button><button data-c="2">情话</button><button data-c="3">English</button></div>
+    <div class="racers">
+      <div class="racer"><div class="top"><b>你</b><span id="meInfo"></span></div><div class="track"><i id="meBar"></i><b id="meCar">🏃</b></div></div>
+      <div class="racer" id="oppRow"><div class="top"><b id="oppName">TA</b><span id="oppInfo"></span></div><div class="track opp"><i id="oppBar"></i><b id="oppCar">🏃‍♀️</b></div></div>
+    </div>
+    <div class="status" id="status"></div>
+    <div class="text" id="text"></div>
+    <textarea id="inp" placeholder="倒数结束后在这里打字" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" disabled></textarea>
+    <div class="stats"><div><b id="sTime">0.0</b>秒</div><div><b id="sSpeed">0</b>字/分</div><div><b id="sAcc">100</b>% 正确</div></div>
+    <div class="row" style="margin-top:12px"><button id="again" class="ghost" style="flex:1">换一段，再来一局</button></div>
+    <div class="reacts" id="reacts"></div>
+  </section>
+</div>
+
+<div id="modal" class="modal hidden"><div class="card"><h3 id="mT"></h3><p id="mP"></p><div class="row" id="mBtns"></div></div></div>
+<div id="toast" class="toast"></div>
+
+<script src="../common.js?v=1794503478"></script>
+<script src="../mqtt.min.js"></script>
+<script>
+(() => {
+  const ui=FB.ui, $=id=>document.getElementById(id);
+  const TEXTS=[
+    [ '吃葡萄不吐葡萄皮，不吃葡萄倒吐葡萄皮。','四是四，十是十，十四是十四，四十是四十。','八百标兵奔北坡，炮兵并排北边跑。',
+      '红凤凰，粉凤凰，红粉凤凰花凤凰。','黑化肥发灰，灰化肥发黑。','扁担长，板凳宽，扁担没有板凳宽，板凳没有扁担长。',
+      '牛郎恋刘娘，刘娘念牛郎。','门口有四辆四轮大马车，你爱拉哪两辆就拉哪两辆。' ],
+    [ '床前明月光，疑是地上霜。举头望明月，低头思故乡。','春眠不觉晓，处处闻啼鸟。夜来风雨声，花落知多少。',
+      '白日依山尽，黄河入海流。欲穷千里目，更上一层楼。','红豆生南国，春来发几枝。愿君多采撷，此物最相思。',
+      '海上生明月，天涯共此时。','两情若是久长时，又岂在朝朝暮暮。','曾经沧海难为水，除却巫山不是云。','只愿君心似我心，定不负相思意。' ],
+    [ '隔着屏幕也能感觉到你在身边，今天也很想你。','不管你在哪个城市，我的天气预报都会多看一个。','等见面那天，我要把这些天没说完的话都说给你听。',
+      '你是我每天打开手机的第一个理由。','时差不重要，距离也不重要，重要的是你一直都在。','今天的晚安提前说，因为想多说一次。',
+      '以后的每一个周末，我都想和你一起浪费。','想把我这边的晚霞，打包寄给你。' ],
+    [ 'The quick brown fox jumps over the lazy dog.','I miss you more than I miss sleep on a Monday morning.','See you soon, and until then, sweet dreams.',
+      'Every time my phone lights up, I hope it is you.','Long distance is just a test of how far love can travel.','Good morning to the best part of my day.' ]
+  ];
+  let mode=null, net=null, code='', st=null, xray=false, seq=[];
+  let cd=null, phase='idle', t0=0, typed='', wrong=0, myDone=null, oppProg={n:0,done:null}, timer=null, startedFor='', lastEmit=0, composing=false;
+
+  const target=()=> st ? TEXTS[st.c][st.ti] : '';
+  const oppId=()=> mode==='online' && st ? (st.players[0]===net.myId ? st.players[1] : st.players[0]) : null;
+  const oppName=()=> oppId() ? net.nameOf(oppId()) : 'TA';
+  function fresh(game, c, players){ return { game, v:0, c, ti:Math.floor(Math.random()*TEXTS[c].length), players, by: mode==='online'?net.myId:'me' }; }
+  const valid=s=> s && Number.isInteger(s.game) && Number.isInteger(s.v) && Number.isInteger(s.c) && s.c>=0 && s.c<TEXTS.length && Number.isInteger(s.ti) && s.ti>=0 && s.ti<TEXTS[s.c].length && Array.isArray(s.players);
+  // same round started on both phones at once: the smaller id wins, so both end up on the same text
+  const newer=s=>!st||s.game>st.game||(s.game===st.game&&(s.v>st.v||(s.v===st.v&&String(s.by)<String(st.by))));
+
+  function newRound(c){
+    const players = mode==='solo' ? ['me'] : net.order();
+    if(mode==='online' && players.length<2){ ui.toast('等 TA 进来再开'); return; }
+    st=fresh((st?st.game:-1)+1, c==null ? (st?st.c:0) : c, players);
+    if(mode==='online') net.setState(st);
+    begin();
+  }
+  // countdown then race, once per round
+  function begin(){
+    const key=st.game+':'+st.c+':'+st.ti; if(startedFor===key) return; startedFor=key;
+    ui.close(); clearInterval(timer); if(cd){ clearInterval(cd.iv); cd.el.remove(); cd=null; }
+    phase='count'; typed=''; wrong=0; myDone=null; oppProg={n:0,done:null};
+    $('inp').value=''; $('inp').disabled=true; render();
+    let n=3; const el=document.createElement('div'); el.className='count'; el.textContent=n; document.body.appendChild(el);
+    const iv=setInterval(()=>{ n--; if(n>0){ el.textContent=n; return; } clearInterval(iv); cd=null; el.textContent='开始！'; setTimeout(()=>el.remove(),450);
+      phase='go'; t0=performance.now(); $('inp').disabled=false; $('inp').focus(); timer=setInterval(tick,100); render(); }, 800);
+    cd={iv,el};
+  }
+  function tick(){ if(phase==='go') stats(); }
+  function stats(){
+    const ms = myDone ? myDone.ms : (phase==='go' ? performance.now()-t0 : 0);
+    const ok=correctCount();
+    $('sTime').textContent=(ms/1000).toFixed(1);
+    $('sSpeed').textContent= ms>500 ? Math.round(ok/(ms/60000)) : 0;
+    $('sAcc').textContent= typed.length||wrong ? Math.round(ok/(ok+wrong)*100) : 100;
+  }
+  function correctCount(){ const t=target(); let i=0; while(i<typed.length && typed[i]===t[i]) i++; return i; }
+
+  function onType(){
+    if(phase!=='go'||composing) return;
+    const t=target(); let v=$('inp').value.replace(/\n/g,'');
+    if(xray) v=t.slice(0, Math.min(t.length, v.length));          // cheat: every keystroke comes out right
+    if(xray) $('inp').value=v;
+    // count newly typed wrong characters
+    const prevOk=correctCount();
+    if(v.length>typed.length){ for(let i=typed.length;i<v.length;i++) if(v[i]!==t[i]) wrong++; }
+    typed=v;
+    const ok=correctCount();
+    if(ok>=t.length){ finish(); }
+    if(mode==='online' && (performance.now()-lastEmit>150 || ok!==prevOk)){ lastEmit=performance.now(); net.emit('pg',{g:st.game,n:ok}); }
+    render();
+  }
+  function finish(){
+    const ms=performance.now()-t0, len=target().length;
+    myDone={ ms:Math.round(ms), wrong, acc:Math.round(len/(len+wrong)*100) };
+    phase='done'; clearInterval(timer); $('inp').disabled=true; stats();
+    if(mode==='online'){ const msg={g:st.game,ms:myDone.ms,wrong:myDone.wrong,acc:myDone.acc}, send=()=>net.emit('done',msg); send(); setTimeout(send,700); setTimeout(send,1800); }
+    render(); results();
+  }
+  function score(r){ return r.ms + r.wrong*1000; }          // each mistake costs a second
+  function results(){
+    if(!myDone) return;
+    const len=target().length, cpm=r=>Math.round(len/(r.ms/60000));
+    if(mode==='solo'){
+      ui.modal('打完了 🎉', '', [{label:'看看'},{label:'再来一段',primary:true,fn:()=>newRound()}]);
+      $('mP').innerHTML=''; $('mP').appendChild(table([['你',myDone]],cpm)); return;
+    }
+    if(!oppProg.done){ $('status').textContent='你打完了！等 '+oppName()+' …'; return; }
+    const me=score(myDone), op=score(oppProg.done);
+    const title = me<op ? '你赢了 🎉' : (me>op ? oppName()+' 赢了' : '平局 🤝');
+    ui.modal(title, '', [{label:'看看'},{label:'再来一局',primary:true,fn:()=>newRound()}]);
+    $('mP').innerHTML=''; $('mP').appendChild(table([['你',myDone],[oppName(),oppProg.done]],cpm));
+    const note=document.createElement('div'); note.style.cssText='font-size:12px;color:var(--muted)'; note.textContent='每打错一个字，成绩加 1 秒'; $('mP').appendChild(note);
+    if(me<op) ui.burst('🎉');
+  }
+  function table(rows,cpm){
+    const t=document.createElement('table'); t.className='res';
+    t.innerHTML='<tr><th></th><th>用时</th><th>打错</th><th>速度</th></tr>';
+    rows.forEach(([n,r])=>{ const tr=document.createElement('tr'); [n,(r.ms/1000).toFixed(1)+' 秒',r.wrong+' 个',cpm(r)+' 字/分'].forEach(x=>{ const td=document.createElement('td'); td.textContent=x; tr.appendChild(td); }); t.appendChild(tr); });
+    return t;
+  }
+
+  function render(){
+    ui.roomTag(mode==='online'?net:null, code, '自己练习');
+    $('copy').classList.toggle('hidden', mode!=='online'); $('reacts').classList.toggle('hidden', mode!=='online');
+    $('oppRow').classList.toggle('hidden', mode!=='online');
+    const s=$('status'); s.className='status';
+    if(!st){ s.textContent = mode==='online'&&!net.connected() ? '连接中…' : '等待 TA 输入房间号 '+code+' 进来…'; $('text').innerHTML=''; return; }
+    document.querySelectorAll('#cats button').forEach(b=>b.classList.toggle('on', +b.dataset.c===st.c));
+    const t=target(), ok=correctCount();
+    const box=$('text'); box.classList.toggle('en', st.c===3); box.innerHTML='';
+    for(let i=0;i<t.length;i++){
+      const sp=document.createElement('span'); sp.textContent=t[i];
+      sp.className = i<ok ? 'ok' : (i<typed.length ? 'bad' : (i===typed.length&&phase==='go' ? 'cur todo' : 'todo'));
+      box.appendChild(sp);
+    }
+    const pct=x=>Math.min(100, x/t.length*100);
+    $('meBar').style.width=pct(ok)+'%'; $('meCar').style.left=Math.max(3,pct(ok))+'%';
+    $('meInfo').textContent = myDone ? '完成 · '+(myDone.ms/1000).toFixed(1)+' 秒' : ok+' / '+t.length;
+    $('oppName').textContent=oppName();
+    $('oppBar').style.width=pct(oppProg.n)+'%'; $('oppCar').style.left=Math.max(3,pct(oppProg.n))+'%';
+    $('oppInfo').textContent = oppProg.done ? '完成 · '+(oppProg.done.ms/1000).toFixed(1)+' 秒' : oppProg.n+' / '+t.length;
+    if(phase==='count') s.textContent='准备…';
+    else if(phase==='go'){ s.textContent='开打！'; s.className='status go'; }
+    else if(phase==='done' && mode==='online' && !oppProg.done) s.textContent='你打完了！等 '+oppName()+' …';
+    else if(phase==='done') s.textContent='这局结束了';
+    stats();
+  }
+
+  // ---- input ----
+  const inp=$('inp');
+  inp.addEventListener('compositionstart',()=>composing=true);
+  inp.addEventListener('compositionend',()=>{ composing=false; onType(); });
+  inp.addEventListener('input',onType);
+  inp.addEventListener('paste',e=>{ e.preventDefault(); ui.toast('不能粘贴哦'); });
+  $('cats').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; if(phase==='go'){ ui.toast('这局打完再换'); return; } newRound(+b.dataset.c); });
+  $('again').onclick=()=>{ if(phase==='go'){ ui.modal('换一段？','这局作废',[{label:'取消'},{label:'换',primary:true,fn:()=>newRound()}]); return; } newRound(); };
+  $('copy').onclick=()=>ui.copyInvite(code,'打字比赛');
+  $('leave').onclick=()=>{ const back='../'+(mode==='online'?'#'+code:''); if(net) net.close(); location.href=back; };
+  ui.reacts(()=>net, 9, i=>{ seq.push(i); if(seq.length>7) seq.shift(); if(seq.join('')==='0014785'){ seq=[]; xray=!xray; } });
+
+  function show(){ $('lobby').classList.add('hidden'); $('game').classList.remove('hidden'); }
+  ui.lobby({
+    onJoin(c){
+      mode='online'; code=c; show();
+      net=FB.net('typing', c, {
+        onConn(){ render(); },
+        onPeers(joined,left){
+          joined.forEach(i=>ui.toast(net.nameOf(i)+' 来了 💕')); left.forEach(i=>ui.toast(net.nameOf(i)+' 离开了房间'));
+          if(!st && net.order().length===2 && net.order()[0]===net.myId) newRound(2);
+          else if(joined.length && st && phase!=='go' && net.order()[0]===net.myId) newRound();   // someone new: start a fresh race together
+          render();
+        },
+        onState(s){ if(valid(s)&&newer(s)){ st=s; begin(); } },
+        onEvent(d){
+          if(d.t==='react' && ui.EMO.includes(d.e)) ui.float(d.e);
+          if(!st||d.g!==st.game) return;
+          if(d.t==='pg' && Number.isInteger(d.n)){ oppProg.n=Math.max(0,Math.min(target().length,d.n)); render(); }
+          if(d.t==='done' && Number.isInteger(d.ms) && d.ms>0 && !oppProg.done){ oppProg.done={ms:d.ms,wrong:Math.max(0,d.wrong|0),acc:d.acc|0}; oppProg.n=target().length; render(); results(); }
+        }
+      });
+      render();
+    },
+    onLocal(){ mode='solo'; code=''; show(); newRound(2); }
+  });
+})();
+</script>
+</body>
+</html>

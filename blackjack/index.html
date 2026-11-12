@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>21 点 · ForBoring</title>
+<link rel="stylesheet" href="../common.css?v=1794503478">
+<style>
+  .table{background:radial-gradient(ellipse at 50% 40%,#2f7a55 0%,#1f5a3e 70%,#174a33 100%);border-radius:22px;padding:14px 14px 16px;color:#f2f7f3;box-shadow:inset 0 0 0 6px #6b4a2a,inset 0 0 0 8px #3d2a17}
+  .seat{padding:6px 4px}
+  .seat .hd{display:flex;justify-content:space-between;align-items:baseline;font-size:14px;margin-bottom:8px}
+  .seat .hd b{font-size:15px}
+  .seat .hd span{font-size:13px;color:#cfe5d8}
+  .seat.turn .hd b::after{content:" · 思考中";color:#ffd27a;font-weight:400;font-size:12px}
+  .cards{display:flex;gap:6px;min-height:92px;flex-wrap:wrap}
+  .pc{width:58px;height:84px;border-radius:8px;background:#fffdf8;color:#222;position:relative;box-shadow:0 3px 8px rgba(0,0,0,.3);font-family:Georgia,"Songti SC",serif;animation:deal .35s ease-out}
+  .pc.red{color:#c62f3e}
+  .pc .r{position:absolute;left:6px;top:4px;font-size:17px;font-weight:700;line-height:1}
+  .pc .s1{position:absolute;left:6px;top:22px;font-size:13px}
+  .pc .s2{position:absolute;right:6px;bottom:6px;font-size:26px}
+  .pc.back{background:repeating-linear-gradient(45deg,#c94a5c 0 6px,#b23a4c 6px 12px);border:3px solid #fffdf8}
+  .pc .peek{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff;opacity:.35}
+  @keyframes deal{from{transform:translateY(-30px) rotate(-8deg);opacity:0}to{transform:none;opacity:1}}
+  .mid{display:flex;align-items:center;justify-content:space-between;margin:10px 4px;font-size:12px;color:#cfe5d8}
+  .deck{display:flex;align-items:center;gap:8px}
+  .deck .pc{width:30px;height:44px;animation:none;border-width:2px}
+  .score{font-family:"Songti SC","STSong",serif;font-size:20px;color:#fff}
+  .acts{display:flex;gap:10px;margin-top:12px}
+  .acts button{flex:1;padding:16px 8px;font-size:17px}
+  .acts .stand{background:#2b2420;color:#fff}
+  .rule{font-size:12px;color:var(--muted);text-align:center;margin-top:8px;line-height:1.6}
+  .badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:12px;margin-left:6px;background:rgba(255,255,255,.15)}
+  .badge.bust{background:#c62f3e}
+  .badge.bj{background:#d4a017;color:#2b2420}
+  .badge.win{background:#ffd27a;color:#2b2420}
+  .next{font-size:11px;opacity:.35}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section id="lobby">
+    <a class="back" href="../">‹ 返回主页</a>
+    <h1>21 点</h1>
+    <p class="sub">各发两张牌，对方只能看到你的第一张。轮流决定要牌还是停牌，谁更接近 21 点谁赢，超过 21 点直接输。</p>
+    <div class="card">
+      <label for="code">房间号（字母或数字）</label>
+      <div class="row">
+        <input id="code" maxlength="12" placeholder="比如 love520" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <button id="rand" class="ghost">🎲</button>
+      </div>
+      <button id="join" class="primary block">进入房间</button>
+      <div class="divider">或者</div>
+      <button id="local" class="ghost block" style="margin-top:6px">先和电脑玩</button>
+    </div>
+  </section>
+
+  <section id="game" class="hidden">
+    <div class="topbar">
+      <div class="roomtag" id="roomtag"></div>
+      <div class="row" style="gap:6px">
+        <button id="copy" class="ghost small">复制邀请</button>
+        <button id="leave" class="ghost small">离开</button>
+      </div>
+    </div>
+
+    <div class="table">
+      <div class="seat" id="seatO"><div class="hd"><b id="nameO">TA</b><span id="valO"></span></div><div class="cards" id="cardsO"></div></div>
+      <div class="mid">
+        <div class="deck"><div class="pc back"></div><span id="deckLeft"></span><span class="next" id="nextCard"></span></div>
+        <div>比分 <span class="score" id="score">0 : 0</span></div>
+      </div>
+      <div class="seat" id="seatM"><div class="hd"><b>你</b><span id="valM"></span></div><div class="cards" id="cardsM"></div></div>
+    </div>
+
+    <div class="status" id="status"></div>
+    <div class="acts">
+      <button id="hit" class="primary">要牌</button>
+      <button id="stand" class="stand">停牌</button>
+    </div>
+    <div class="rule">A 算 1 或 11 · J Q K 算 10 · 两张牌正好 21 点是「黑杰克」，直接停牌</div>
+    <div class="row" style="margin-top:12px"><button id="again" class="ghost" style="flex:1">重开一局</button></div>
+    <div class="reacts" id="reacts"></div>
+  </section>
+</div>
+
+<div id="modal" class="modal hidden"><div class="card"><h3 id="mT"></h3><p id="mP"></p><div class="row" id="mBtns"></div></div></div>
+<div id="toast" class="toast"></div>
+
+<script src="../common.js?v=1794503478"></script>
+<script src="../mqtt.min.js"></script>
+<script>
+(() => {
+  const ui=FB.ui, $=id=>document.getElementById(id);
+  const SUITS=['♠','♥','♣','♦'], RANKS=['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+  let mode=null, net=null, code='', st=null, endShown='', xray=false, seq=[];
+
+  const ME=()=> mode==='bot' ? 'me' : net.myId;
+  const OPP=()=> st ? (st.players[0]===ME() ? st.players[1] : st.players[0]) : null;
+  const nameOf=id=> id==='bot' ? '电脑' : (id===ME() ? '你' : (net?net.nameOf(id):'TA'));
+  const turnId=()=> st && st.phase==='play' ? st.players[st.turn] : null;
+
+  // ---- deck from a seed, same on both phones ----
+  function deckOf(seed){ let x=seed>>>0||1; const r=()=>{ x^=x<<13; x>>>=0; x^=x>>>17; x^=x<<5; x>>>=0; return x/4294967296; }; const d=[...Array(52).keys()]; for(let i=51;i>0;i--){ const j=Math.floor(r()*(i+1)); [d[i],d[j]]=[d[j],d[i]]; } return d; }
+  const rank=c=>c%13, suit=c=>Math.floor(c/13);
+  function value(cards){ let t=0, a=0; cards.forEach(c=>{ const r=rank(c); if(r===0){ t+=11; a++; } else t+=Math.min(10,r+1); }); while(t>21&&a){ t-=10; a--; } return t; }
+  const isBJ=cards=>cards.length===2&&value(cards)===21;
+
+  function fresh(game, players, score){
+    const seed=1+Math.floor(Math.random()*2147483646), d=deckOf(seed);
+    const hands={}; hands[players[0]]=[d[0],d[2]]; hands[players[1]]=[d[1],d[3]];
+    const sc={}; players.forEach(p=>sc[p]=score&&Number.isInteger(score[p])?score[p]:0);
+    const s={ game, v:0, players, seed, idx:4, hands, stood:{}, turn:game%2, phase:'play', winner:null, bust:null, score:sc };
+    players.forEach(p=>{ if(isBJ(hands[p])) s.stood[p]=true; });
+    advance(s);
+    return s;
+  }
+  function valid(s){
+    if(!s||!Number.isInteger(s.game)||!Number.isInteger(s.v)||!Number.isInteger(s.seed)||!Number.isInteger(s.idx)||s.idx>52) return false;
+    if(!Array.isArray(s.players)||s.players.length!==2||!s.hands||!s.stood||!s.score||(s.turn!==0&&s.turn!==1)) return false;
+    return s.players.every(p=>Array.isArray(s.hands[p])&&s.hands[p].length<=12&&s.hands[p].every(c=>Number.isInteger(c)&&c>=0&&c<52));
+  }
+  const newer=s=>!st||s.game>st.game||(s.game===st.game&&s.v>st.v);
+
+  // move the turn on, finish the hand when both are done
+  function advance(s){
+    const [a,b]=s.players;
+    if(s.bust){ finish(s); return; }
+    if(s.stood[a]&&s.stood[b]){ finish(s); return; }
+    if(s.stood[s.players[s.turn]]) s.turn=1-s.turn;
+  }
+  function finish(s){
+    s.phase='done';
+    const [a,b]=s.players;
+    if(s.bust) s.winner = s.bust===a ? b : a;
+    else { const va=value(s.hands[a]), vb=value(s.hands[b]); s.winner = va>vb ? a : (vb>va ? b : null); }
+    if(s.winner) s.score[s.winner]=(s.score[s.winner]||0)+1;
+  }
+  function commit(s){ st=s; render(); if(mode==='online') net.setState(s); afterChange(); }
+
+  function act(kind, who){
+    if(!st||st.phase!=='play'||turnId()!==who) return;
+    const s=JSON.parse(JSON.stringify(st)), d=deckOf(s.seed); s.v++;
+    if(kind==='hit'){
+      s.hands[who].push(d[s.idx++]);
+      const v=value(s.hands[who]);
+      if(v>21) s.bust=who; else if(v===21) s.stood[who]=true;
+    } else s.stood[who]=true;
+    advance(s); commit(s);
+  }
+  function restart(){
+    const players = mode==='bot' ? ['me','bot'] : net.order();
+    if(players.length<2){ ui.toast('等 TA 进来再开'); return; }
+    endShown=''; commit(fresh((st?st.game:-1)+1, players, st&&st.score));
+  }
+
+  // ---- bot: hits below 17, or when it's behind a standing player ----
+  let botT=null;
+  function afterChange(){
+    if(mode==='bot' && st && st.phase==='play' && turnId()==='bot' && !botT){
+      botT=setTimeout(()=>{ botT=null; if(!st||turnId()!=='bot') return;
+        const v=value(st.hands.bot), meStood=st.stood.me, myShown=value([st.hands.me[0]]);
+        const hit = v<17 || (meStood && v<value(st.hands.me) && false) || (v<13) || (v===16 && myShown>=7 && Math.random()<.5);
+        act(hit?'hit':'stand','bot'); }, 900+Math.random()*700);
+    }
+    if(st && st.phase==='done'){
+      const key=st.game+':'+st.v; if(endShown===key) return; endShown=key;
+      const me=ME(), o=OPP(), vm=value(st.hands[me]), vo=value(st.hands[o]);
+      let title, text;
+      if(st.bust===me){ title='爆牌了 💥'; text='你的牌 '+vm+' 点，超过 21'; }
+      else if(st.bust===o){ title=nameOf(o)+' 爆牌了 🎉'; text=nameOf(o)+' '+vo+' 点'; }
+      else if(!st.winner){ title='平局 🤝'; text='都是 '+vm+' 点'; }
+      else if(st.winner===me){ title='你赢了 🎉'; text=vm+' 点 对 '+vo+' 点'; }
+      else { title=nameOf(o)+' 赢了'; text=vo+' 点 对 '+vm+' 点'; }
+      setTimeout(()=>{ ui.modal(title, text, [{label:'看看牌'},{label:'再来一局',primary:true,fn:restart}]); if(st.winner===me) ui.burst('🎉'); }, 700);
+    }
+  }
+
+  // ---- render ----
+  function cardEl(c, hidden, peek){
+    const el=document.createElement('div');
+    if(hidden){ el.className='pc back'; if(peek){ const p=document.createElement('div'); p.className='peek'; p.textContent=RANKS[rank(c)]+SUITS[suit(c)]; el.appendChild(p); } return el; }
+    const r=RANKS[rank(c)], s=SUITS[suit(c)];
+    el.className='pc'+(suit(c)%2?' red':'');
+    el.innerHTML='<div class="r"></div><div class="s1"></div><div class="s2"></div>';
+    el.querySelector('.r').textContent=r; el.querySelector('.s1').textContent=s; el.querySelector('.s2').textContent=s;
+    return el;
+  }
+  function badges(id){
+    const h=st.hands[id], v=value(h); let b='';
+    if(st.bust===id) b='<span class="badge bust">爆牌</span>';
+    else if(isBJ(h)) b='<span class="badge bj">黑杰克</span>';
+    else if(st.stood[id]) b='<span class="badge">停牌</span>';
+    if(st.phase==='done'&&st.winner===id) b+='<span class="badge win">赢</span>';
+    return b;
+  }
+  function render(){
+    ui.roomTag(mode==='online'?net:null, code, '和电脑玩');
+    $('copy').classList.toggle('hidden', mode!=='online'); $('reacts').classList.toggle('hidden', mode!=='online');
+    const s=$('status'); s.className='status';
+    if(!st){ s.textContent = mode==='online'&&!net.connected() ? '连接中…' : '等待 TA 输入房间号 '+code+' 进来…'; $('hit').disabled=$('stand').disabled=true; return; }
+    const me=ME(), o=OPP(), done=st.phase==='done';
+    $('nameO').textContent=nameOf(o);
+    const fill=(box,id,hideRest)=>{ const el=$(box); el.innerHTML=''; st.hands[id].forEach((c,i)=>el.appendChild(cardEl(c, hideRest&&i>0, xray))); };
+    fill('cardsM', me, false); fill('cardsO', o, !done);
+    $('valM').innerHTML = value(st.hands[me])+' 点'+badges(me);
+    $('valO').innerHTML = (done ? value(st.hands[o])+' 点' : '明牌 '+value([st.hands[o][0]])+' 点 + ?')+badges(o);
+    $('seatM').classList.toggle('turn', turnId()===me); $('seatO').classList.toggle('turn', turnId()===o);
+    $('deckLeft').textContent='剩 '+(52-st.idx)+' 张';
+    $('nextCard').textContent = xray && !done && st.idx<52 ? (()=>{ const c=deckOf(st.seed)[st.idx]; return '·'+RANKS[rank(c)]+SUITS[suit(c)]; })() : '';
+    $('score').textContent=(st.score[me]||0)+' : '+(st.score[o]||0);
+    const mine=turnId()===me;
+    $('hit').disabled=$('stand').disabled=!mine;
+    if(done) s.textContent = st.winner ? (st.winner===me?'你赢了 🎉':nameOf(st.winner)+' 赢了') : '平局';
+    else if(mode==='online'&&!net.connected()) s.textContent='连接中…';
+    else if(mine){ s.textContent='轮到你：要牌还是停牌？'; s.className='status go'; }
+    else s.textContent=nameOf(turnId())+' 在想要不要牌…';
+    $('again').textContent = done ? '再来一局' : '重开一局';
+  }
+
+  // ---- input ----
+  $('hit').onclick=()=>act('hit', ME());
+  $('stand').onclick=()=>act('stand', ME());
+  $('again').onclick=()=>{ if(!st||st.phase==='done') restart(); else ui.modal('重开一局？','这局作废，重新发牌',[{label:'取消'},{label:'重开',primary:true,fn:restart}]); };
+  $('copy').onclick=()=>ui.copyInvite(code,'21 点');
+  $('leave').onclick=()=>{ const back='../'+(mode==='online'?'#'+code:''); if(net) net.close(); location.href=back; };
+  ui.reacts(()=>net, 9, i=>{ seq.push(i); if(seq.length>7) seq.shift(); if(seq.join('')==='0014785'){ seq=[]; xray=!xray; render(); } });
+
+  function show(){ $('lobby').classList.add('hidden'); $('game').classList.remove('hidden'); }
+  ui.lobby({
+    onJoin(c){
+      mode='online'; code=c; show();
+      net=FB.net('blackjack', c, {
+        onConn(){ render(); },
+        onPeers(joined,left){
+          joined.forEach(i=>ui.toast(net.nameOf(i)+' 来了 💕')); left.forEach(i=>ui.toast(net.nameOf(i)+' 离开了房间'));
+          if(joined.length && st) net.setState(st);
+          if(!st && net.order().length===2 && net.order()[0]===net.myId) restart();
+          render();
+        },
+        onState(s){ if(valid(s)&&newer(s)){ if(st&&s.game>st.game){ ui.close(); endShown=''; } st=s; render(); afterChange(); } },
+        onEvent(d){ if(d.t==='react' && ui.EMO.includes(d.e)) ui.float(d.e); }
+      });
+      render();
+    },
+    onLocal(){ mode='bot'; code=''; show(); restart(); }
+  });
+})();
+</script>
+</body>
+</html>
