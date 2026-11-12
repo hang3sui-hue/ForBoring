@@ -19,6 +19,7 @@
   .track b{position:absolute;top:-9px;font-size:20px;transition:left .15s;transform:translateX(-50%) scaleX(-1)}
   .text{margin-top:12px;background:#fff;border:1.5px solid var(--line);border-radius:16px;padding:16px;font-size:21px;line-height:1.9;letter-spacing:1px;word-break:break-all;min-height:110px;font-family:"Songti SC","STSong",serif}
   .text.en{font-family:Georgia,serif;font-size:19px;letter-spacing:.5px}
+  .text{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
   .text span{border-radius:3px}
   .text .ok{color:#3f9d6b}
   .text .bad{color:#fff;background:#e0455a}
@@ -140,6 +141,8 @@
     const t=target(); let v=$('inp').value.replace(/\n/g,'');
     if(xray) v=t.slice(0, Math.min(t.length, v.length));          // cheat: every keystroke comes out right
     if(xray) $('inp').value=v;
+    // anything that drops a big chunk in at once (paste from the keyboard's clipboard bar, drag, autofill) is rejected
+    if(!xray && v.length-typed.length>8){ $('inp').value=typed; ui.toast('不能复制粘贴哦，要自己打'); return; }
     // count newly typed wrong characters
     const prevOk=correctCount();
     if(v.length>typed.length){ for(let i=typed.length;i<v.length;i++) if(v[i]!==t[i]) wrong++; }
@@ -211,7 +214,11 @@
   inp.addEventListener('compositionstart',()=>composing=true);
   inp.addEventListener('compositionend',()=>{ composing=false; onType(); });
   inp.addEventListener('input',onType);
-  inp.addEventListener('paste',e=>{ e.preventDefault(); ui.toast('不能粘贴哦'); });
+  inp.addEventListener('paste',e=>{ e.preventDefault(); ui.toast('不能复制粘贴哦，要自己打'); });
+  inp.addEventListener('drop',e=>{ e.preventDefault(); });
+  inp.addEventListener('beforeinput',e=>{ if(/^insertFrom(Paste|Drop|Yank|PasteAsQuotation)$/.test(e.inputType||'')){ e.preventDefault(); ui.toast('不能复制粘贴哦，要自己打'); } });
+  const box=$('text'); ['copy','cut','contextmenu','selectstart','dragstart'].forEach(ev=>box.addEventListener(ev,e=>e.preventDefault()));
+  document.addEventListener('copy',e=>{ if(phase==='go'||phase==='count'){ e.preventDefault(); } });
   $('cats').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; if(phase==='go'){ ui.toast('这局打完再换'); return; } newRound(+b.dataset.c); });
   $('again').onclick=()=>{ if(phase==='go'){ ui.modal('换一段？','这局作废',[{label:'取消'},{label:'换',primary:true,fn:()=>newRound()}]); return; } newRound(); };
   $('copy').onclick=()=>ui.copyInvite(code,'打字比赛');
