@@ -9,56 +9,192 @@
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,"PingFang SC","Microsoft YaHei","Noto Sans SC",system-ui,sans-serif}
   body{min-height:100vh;display:flex;justify-content:center}
-  .wrap{width:100%;max-width:560px;padding:36px 18px 48px}
+  .wrap{width:100%;max-width:560px;padding:32px 18px 48px}
   .hello{font-size:13px;letter-spacing:3px;color:var(--accent);font-weight:700;margin:0 0 6px}
-  h1{font-family:"Songti SC","STSong","Noto Serif SC",serif;font-size:34px;margin:0 0 6px;letter-spacing:1px}
-  .sub{color:var(--muted);font-size:14px;margin:0 0 28px;line-height:1.6}
+  h1{font-family:"Songti SC","STSong","Noto Serif SC",serif;font-size:32px;margin:0 0 18px;letter-spacing:1px}
+  .card{background:var(--card);border:1.5px solid var(--line);border-radius:18px;padding:16px;margin-bottom:12px}
+  .lbl{font-size:12px;color:var(--muted);margin-bottom:8px;display:flex;justify-content:space-between}
+  .row{display:flex;gap:8px;align-items:center}
+  input{flex:1;min-width:0;font:inherit;font-size:18px;padding:10px 12px;border-radius:12px;border:1.5px solid var(--line);background:#fff;color:var(--ink);outline:none}
+  input:focus{border-color:var(--accent)}
+  #room{font-size:24px;letter-spacing:6px;font-weight:700;text-transform:lowercase;text-align:center}
+  button{font:inherit;font-weight:500;border:none;border-radius:12px;padding:10px 14px;cursor:pointer;background:#efe5d8;color:var(--ink);transition:transform .08s}
+  button:active{transform:scale(.96)}
+  .primary{background:var(--accent);color:#fff}
+  .who{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;font-size:13px}
+  .who span{display:flex;align-items:center;gap:6px;background:#efe5d8;border-radius:20px;padding:5px 11px}
+  .who span.me{background:var(--accent-soft)}
+  .who i{width:7px;height:7px;border-radius:50%;background:#4caf7a;display:inline-block}
+  .who em{font-style:normal;color:var(--muted);font-size:12px}
+  .sec{font-size:15px;font-weight:700;margin:22px 0 10px}
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  .game{position:relative;display:flex;flex-direction:column;gap:6px;text-decoration:none;color:inherit;background:var(--card);border:1.5px solid var(--line);border-radius:18px;padding:18px 16px 16px;min-height:150px;transition:transform .12s,box-shadow .2s,border-color .2s}
+  .game{position:relative;display:flex;flex-direction:column;gap:6px;text-decoration:none;color:inherit;background:var(--card);border:1.5px solid var(--line);border-radius:18px;padding:18px 16px 16px;min-height:150px;transition:transform .12s,box-shadow .2s,border-color .2s;cursor:pointer}
   a.game:hover{border-color:var(--accent);box-shadow:0 8px 24px rgba(217,88,107,.12)}
   a.game:active{transform:scale(.97)}
   .game .ic{font-size:34px;line-height:1;margin-bottom:6px}
   .game .nm{font-weight:700;font-size:17px}
   .game .ds{font-size:13px;color:var(--muted);line-height:1.5}
   .game.feat{grid-column:1 / -1;flex-direction:row;align-items:center;gap:16px;min-height:0;padding:18px}
-  .game.feat .ic{font-size:44px;margin:0}
   .game.feat .go{margin-left:auto;background:var(--accent);color:#fff;border-radius:12px;padding:10px 16px;font-size:14px;font-weight:500;white-space:nowrap}
-  .game.soon{opacity:.55}
+  .game.soon{opacity:.55;cursor:default}
   .tag{position:absolute;top:12px;right:12px;font-size:11px;background:#efe5d8;color:var(--muted);border-radius:8px;padding:3px 7px}
+  .here{position:absolute;top:12px;right:12px;font-size:11px;background:var(--accent-soft);color:var(--accent);border-radius:8px;padding:3px 7px}
+  .game.feat .here{top:-9px;right:14px}
   .board{width:52px;height:52px;flex:none;border-radius:10px;background:linear-gradient(135deg,#ecc893,#d8a764);position:relative;box-shadow:0 4px 12px rgba(90,55,20,.2)}
-  .board::before{content:"";position:absolute;inset:8px;background:
-      linear-gradient(rgba(70,40,10,.6) 1px,transparent 1px) 0 0/9px 9px,
-      linear-gradient(90deg,rgba(70,40,10,.6) 1px,transparent 1px) 0 0/9px 9px}
+  .board::before{content:"";position:absolute;inset:8px;background:linear-gradient(rgba(70,40,10,.6) 1px,transparent 1px) 0 0/9px 9px,linear-gradient(90deg,rgba(70,40,10,.6) 1px,transparent 1px) 0 0/9px 9px}
   .board i{position:absolute;width:10px;height:10px;border-radius:50%}
   .board i.b{background:radial-gradient(circle at 35% 30%,#666,#111 60%)}
   .board i.w{background:radial-gradient(circle at 35% 30%,#fff,#d9d4cc 70%)}
   .foot{margin-top:28px;font-size:12px;color:var(--muted);text-align:center;line-height:1.7}
+  .toast{position:fixed;left:50%;top:18px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:9px 16px;border-radius:20px;font-size:13px;z-index:120;opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap}
+  .toast.on{opacity:.92}
+  .modal{position:fixed;inset:0;background:rgba(40,25,15,.35);display:flex;align-items:center;justify-content:center;z-index:100;padding:24px}
+  .modal .card{max-width:340px;width:100%;text-align:center;margin:0}
+  .modal h3{font-family:"Songti SC","STSong",serif;margin:4px 0 8px;font-size:22px}
+  .modal p{color:var(--muted);margin:0 0 16px;font-size:14px}
+  .modal .row button{flex:1;padding:12px}
+  .hidden{display:none!important}
 </style>
 </head>
 <body>
 <div class="wrap">
   <p class="hello">FOR BORING</p>
   <h1>今天玩点什么？</h1>
-  <p class="sub">隔着屏幕也能一起玩。选个游戏，输入同一个房间号就能配对。</p>
 
-  <div class="grid">
-    <a class="game feat" href="gomoku/">
-      <div class="board"><i class="b" style="left:11px;top:11px"></i><i class="w" style="left:20px;top:20px"></i><i class="b" style="left:29px;top:20px"></i><i class="w" style="left:20px;top:29px"></i><i class="b" style="left:29px;top:29px"></i></div>
-      <div>
-        <div class="nm">五子棋</div>
-        <div class="ds">联机对弈 · 悔棋 · 互发表情</div>
-      </div>
-      <span class="go">开始</span>
-    </a>
-
-    <a class="game" href="rps/"><div class="ic">✊✌️✋</div><div class="nm">石头剪刀布</div><div class="ds">谁输谁洗碗 · 同时亮手不偷看</div></a>
-    <a class="game" href="battleship/"><div class="ic">⚓️</div><div class="nm">海战棋</div><div class="ds">经典版 · 偷偷摆船，轮流开炮</div></a>
-    <div class="game soon"><span class="tag">即将上线</span><div class="ic">🎨</div><div class="nm">你画我猜</div><div class="ds">一个画一个猜</div></div>
-    <div class="game soon"><span class="tag">即将上线</span><div class="ic">💞</div><div class="nm">默契大考验</div><div class="ds">同一道题，看你们选得一不一样</div></div>
-    <div class="game soon"><span class="tag">即将上线</span><div class="ic">🔴</div><div class="nm">四子棋</div><div class="ds">从上往下落子，连成四个就赢</div></div>
+  <div class="card">
+    <div class="lbl"><span>我的名字</span><span id="nameSaved"></span></div>
+    <div class="row">
+      <input id="name" maxlength="12" autocomplete="off" placeholder="起个名字">
+      <button id="nameRnd" title="随机一个">🎲</button>
+    </div>
   </div>
 
-  <p class="foot">无需注册 · 国内可直接打开</p>
+  <div class="card">
+    <div class="lbl"><span>房间号</span><span id="conn">连接中…</span></div>
+    <div class="row">
+      <input id="room" maxlength="12" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <button id="roomRnd" title="换一个">🎲</button>
+      <button id="copy" class="primary">邀请</button>
+    </div>
+    <div class="who" id="who"></div>
+  </div>
+
+  <div class="sec">选个游戏</div>
+  <div class="grid">
+    <a class="game feat" data-g="gomoku" href="gomoku/">
+      <div class="board"><i class="b" style="left:11px;top:11px"></i><i class="w" style="left:20px;top:20px"></i><i class="b" style="left:29px;top:20px"></i><i class="w" style="left:20px;top:29px"></i><i class="b" style="left:29px;top:29px"></i></div>
+      <div><div class="nm">五子棋</div><div class="ds">联机对弈 · 悔棋 · 互发表情</div></div>
+      <span class="go">开始</span>
+    </a>
+    <a class="game" data-g="rps" href="rps/"><div class="ic">✊✌️✋</div><div class="nm">石头剪刀布</div><div class="ds">谁输谁洗碗 · 同时亮手不偷看</div></a>
+    <a class="game" data-g="battleship" href="battleship/"><div class="ic">⚓️</div><div class="nm">海战棋</div><div class="ds">经典版 · 偷偷摆船，轮流开炮</div></a>
+    <div class="game soon"><span class="tag">即将上线</span><div class="ic">🎨</div><div class="nm">你画我猜</div><div class="ds">一个画一个猜</div></div>
+    <div class="game soon"><span class="tag">即将上线</span><div class="ic">💞</div><div class="nm">默契大考验</div><div class="ds">同一道题，看你们选得一不一样</div></div>
+  </div>
+
+  <p class="foot">无需注册 · 国内可直接打开<br>把房间号发给 TA，进同一个房间后选游戏，TA 会收到邀请</p>
 </div>
+
+<div id="modal" class="modal hidden"><div class="card"><h3 id="mT"></h3><p id="mP"></p><div class="row" id="mBtns"></div></div></div>
+<div id="toast" class="toast"></div>
+
+<script src="common.js"></script>
+<script src="mqtt.min.js"></script>
+<script>
+(() => {
+  const BROKER='wss://broker-cn.emqx.io:8084/mqtt', ALIVE_MS=45000;
+  const GAMES={ gomoku:'五子棋', rps:'石头剪刀布', battleship:'海战棋', hub:'主页' };
+  const $=id=>document.getElementById(id);
+  const myId=FB.id();
+  let client=null, base='', conn=false, peers=new Map(), hb=null, tick=null, code='', wasPresent=new Set();
+
+  function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('on'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('on'),1800); }
+  function modal(title,text,btns){ $('mT').textContent=title; $('mP').textContent=text; const b=$('mBtns'); b.innerHTML=''; btns.forEach(x=>{ const e=document.createElement('button'); e.textContent=x.label; if(x.primary) e.className='primary'; e.onclick=()=>{ $('modal').classList.add('hidden'); x.fn&&x.fn(); }; b.appendChild(e); }); $('modal').classList.remove('hidden'); }
+
+  // ---- name ----
+  $('name').value=FB.name();
+  function saveName(){ const n=FB.setName($('name').value); $('name').value=n; $('nameSaved').textContent='已保存 ✓'; setTimeout(()=>$('nameSaved').textContent='',1500); beat(); render(); }
+  $('name').addEventListener('change',saveName);
+  $('name').addEventListener('keydown',e=>{ if(e.key==='Enter') $('name').blur(); });
+  $('nameRnd').onclick=()=>{ document.cookie='fb_name=; path=/; max-age=0'; try{ localStorage.removeItem('fb_name'); }catch(_){} $('name').value=FB.name(); saveName(); };
+
+  // ---- room ----
+  function useRoom(r){
+    r=FB.setRoom(r); $('room').value=r;
+    try{ history.replaceState(null,'','#'+r); }catch(_){}
+    document.querySelectorAll('a.game[data-g]').forEach(a=>a.href=a.dataset.g+'/#'+r);
+    if(r!==code) connect(r);
+  }
+  $('room').addEventListener('input',e=>{ const c=FB.cleanRoom(e.target.value); if(c!==e.target.value) e.target.value=c; });
+  $('room').addEventListener('change',()=>{ if(FB.cleanRoom($('room').value)) useRoom($('room').value); else $('room').value=code; });
+  $('room').addEventListener('keydown',e=>{ if(e.key==='Enter') $('room').blur(); });
+  $('roomRnd').onclick=()=>{ useRoom(FB.randomRoom()); toast('换了个新房间'); };
+  $('copy').onclick=()=>{
+    const link=location.origin+location.pathname+'#'+code;
+    const txt=FB.name()+' 喊你来玩！打开 '+link+' ，房间号：'+code;
+    try{ navigator.clipboard.writeText(txt).then(()=>toast('邀请已复制，发给 TA 吧'),()=>toast('房间号：'+code)); }catch(_){ toast('房间号：'+code); }
+  };
+
+  // ---- presence ----
+  function beat(){ if(client&&conn) FB.hubBeat(client, code, myId, 'hub'); }
+  function connect(r){
+    if(client){ try{ if(conn) client.publish(base+'/p/'+myId,'',{qos:1,retain:true}); client.end(true); }catch(_){} }
+    clearInterval(hb); clearInterval(tick);
+    code=r; base='hub-duo-v1/'+r; peers=new Map(); wasPresent=new Set(); conn=false; render();
+    if(!window.mqtt){ $('conn').textContent='联机组件没加载出来'; return; }
+    const c=mqtt.connect(BROKER,{ clientId:'hub_'+myId+'_'+Math.random().toString(36).slice(2,6), clean:true, keepalive:30, reconnectPeriod:2000, connectTimeout:10000,
+      will:{ topic:base+'/p/'+myId, payload:'', qos:1, retain:true } });
+    client=c;
+    c.on('connect',()=>{ if(client!==c) return; conn=true; c.subscribe(base+'/#',{qos:1}); beat(); render(); });
+    c.on('message',(topic,payload)=>{
+      if(client!==c) return;
+      const sub=topic.slice(base.length+1), txt=payload.toString();
+      let d=null; if(txt){ try{ d=JSON.parse(txt); }catch(_){ return; } }
+      if(sub.startsWith('p/')){
+        const id=sub.slice(2); if(!/^[a-z0-9]{1,16}$/.test(id)||id===myId) return;
+        if(!d) peers.delete(id);
+        else if(typeof d.t==='number') peers.set(id,{ t:d.t, n:FB.cleanName(d.n)||'TA', at:(d.at in GAMES)?d.at:'hub' });
+        checkPeers();
+      } else if(sub==='e' && d && d.from!==myId && d.t==='go' && (d.g in GAMES) && d.g!=='hub'){
+        const who=FB.cleanName(d.n)||'TA';
+        modal(who+' 想和你玩'+GAMES[d.g], '房间 '+code, [{label:'等会儿'},{label:'去！',primary:true,fn:()=>{ location.href=d.g+'/#'+code; }}]);
+      }
+    });
+    c.on('close',()=>{ if(client===c){ conn=false; render(); } });
+    c.on('offline',()=>{ if(client===c){ conn=false; render(); } });
+    c.on('error',()=>{});
+    hb=setInterval(beat,15000); tick=setInterval(checkPeers,5000);
+  }
+  function alive(){ const now=Date.now(), r=[]; peers.forEach((p,id)=>{ if(now-p.t<ALIVE_MS) r.push(Object.assign({id},p)); }); return r; }
+  function checkPeers(){
+    const cur=alive(), ids=new Set(cur.map(p=>p.id));
+    cur.forEach(p=>{ if(!wasPresent.has(p.id)) toast(p.n+' 在房间里 💕'); });
+    wasPresent=ids; render();
+  }
+  function render(){
+    $('conn').textContent = conn ? '已连接' : '连接中…';
+    const box=$('who'); box.innerHTML='';
+    const add=(n,extra,me)=>{ const s=document.createElement('span'); if(me) s.className='me'; const i=document.createElement('i'); s.appendChild(i); s.appendChild(document.createTextNode(n)); if(extra){ const e=document.createElement('em'); e.textContent=extra; s.appendChild(e); } box.appendChild(s); };
+    add(FB.name()+'（你）','',true);
+    const ps=alive();
+    ps.forEach(p=>add(p.n, p.at!=='hub'?'在玩'+GAMES[p.at]:''));
+    if(!ps.length){ const s=document.createElement('span'); s.style.background='transparent'; s.style.color='var(--muted)'; s.textContent='等 TA 进来…'; box.appendChild(s); }
+    document.querySelectorAll('.here').forEach(e=>e.remove());
+    ps.filter(p=>p.at!=='hub').forEach(p=>{ const a=document.querySelector('a.game[data-g="'+p.at+'"]'); if(a && !a.querySelector('.here')){ const t=document.createElement('span'); t.className='here'; t.textContent=p.n+' 在这'; a.appendChild(t); } });
+  }
+
+  // ---- pick a game: invite whoever is here ----
+  document.querySelectorAll('a.game[data-g]').forEach(a=>a.addEventListener('click',e=>{
+    if(client&&conn&&alive().length){
+      e.preventDefault();
+      client.publish(base+'/e', JSON.stringify({t:'go', g:a.dataset.g, n:FB.name(), from:myId}), {qos:1});
+      setTimeout(()=>{ location.href=a.href; }, 250);
+    }
+  }));
+  window.addEventListener('pagehide',()=>{ if(client&&conn){ try{ client.publish(base+'/p/'+myId,'',{qos:1,retain:true}); }catch(_){} } });
+
+  useRoom(FB.cleanRoom(location.hash.slice(1)) || FB.room());
+})();
+</script>
 </body>
 </html>

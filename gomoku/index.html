@@ -129,6 +129,7 @@
 </div>
 <div id="toast" class="toast"></div>
 
+<script src="../common.js"></script>
 <script src="../mqtt.min.js"></script>
 <script>
 (() => {
@@ -212,7 +213,9 @@
   function pub(sub, obj, retain){ if (client && conn) client.publish(base+'/'+sub, obj===null?'':JSON.stringify(obj), { qos: 1, retain: !!retain }); }
   function send(t, extra){ if (mode==='online') pub('e', Object.assign({ t, from: myId }, extra||{})); }
   function pushState(){ if (mode==='online') pub('state', st, true); }
-  function heartbeat(){ pub('p/'+myId, { t: Date.now() }, true); }
+  function heartbeat(){ pub('p/'+myId, { t: Date.now(), n: FB.name() }, true); if(client&&conn) FB.hubBeat(client, code, myId, 'gomoku'); }
+  const names=new Map(); const nameOf=id=>names.get(id)||'TA';
+  const T=()=>{ const o=players().find(i=>i!==myId)||present().find(i=>i!==myId); return o?nameOf(o):'TA'; };
 
   function onMessage(topic, payload){
     const sub = topic.slice(base.length+1);
@@ -226,24 +229,24 @@
       }
     } else if (sub.startsWith('p/')) {
       const id = sub.slice(2); if (!/^[a-z0-9]{1,16}$/.test(id) || id===myId) return;
-      if (!d) peers.delete(id); else if (typeof d.t==='number') peers.set(id, d.t);
+      if (!d) peers.delete(id); else if (typeof d.t==='number') { peers.set(id, d.t); if (FB.cleanName(d.n)) names.set(id, FB.cleanName(d.n)); }
       checkPeers();
     } else if (sub==='e' && d && d.from!==myId) {
       if (d.t==='undo-req') {
         const mc=myColor(); if (!mc || d.game!==st.game || d.v!==st.v || (d.color!==1&&d.color!==2) || d.color===mc) return;
-        modal('TA 想悔棋','同意让 TA 悔一步吗？', [
+        modal(T()+' 想悔棋','同意让 '+T()+' 悔一步吗？', [
           {label:'不行', fn:()=>send('undo-no')},
           {label:'好吧', primary:true, fn:()=>{ if (st.v===d.v && st.game===d.game) undoFor(d.color); }}
         ]);
-      } else if (d.t==='undo-no') { undoAsked=false; renderUI(derived()); toast('TA 不同意悔棋 😤'); }
+      } else if (d.t==='undo-no') { undoAsked=false; renderUI(derived()); toast(T()+' 不同意悔棋 😤'); }
       else if (d.t==='react' && EMO.includes(d.e)) floatEmoji(d.e);
     }
   }
   function checkPeers(){
     const now=Date.now(); const cur=new Set();
     peers.forEach((t,id)=>{ if (now-t<ALIVE_MS) cur.add(id); });
-    cur.forEach(id=>{ if(!wasPresent.has(id)) toast('TA 来了 💕'); });
-    wasPresent.forEach(id=>{ if(!cur.has(id)) toast('TA 离开了房间'); });
+    cur.forEach(id=>{ if(!wasPresent.has(id)) toast(nameOf(id)+' 来了 💕'); });
+    wasPresent.forEach(id=>{ if(!cur.has(id)) toast(nameOf(id)+' 离开了房间'); });
     wasPresent=cur; render();
   }
 
@@ -266,12 +269,13 @@
     hbTimer = setInterval(heartbeat, 15000);
     tickTimer = setInterval(checkPeers, 5000);
   }
+  const hubClear=()=>{ try{ client.publish('hub-duo-v1/'+code+'/p/'+myId,'',{qos:1,retain:true}); }catch(_){} };
   function disconnect(){
     clearInterval(hbTimer); clearInterval(tickTimer);
-    if (client){ try { if (conn) pub('p/'+myId, null, true); client.end(false); } catch(_) {} }
+    if (client){ try { if (conn) pub('p/'+myId, null, true); hubClear(); client.end(false); } catch(_) {} }
     client=null; conn=false;
   }
-  window.addEventListener('pagehide', ()=>{ if (client && conn) { try { pub('p/'+myId, null, true); } catch(_) {} } });
+  window.addEventListener('pagehide', ()=>{ if (client && conn) { try { pub('p/'+myId, null, true); hubClear(); } catch(_) {} } });
 
   // ---------- game actions ----------
   let announcedFor='';
@@ -284,7 +288,7 @@
         let title, text;
         if (d.full && !d.winner){ title='平局'; text='棋盘下满啦，难分高下'; }
         else if (mode==='local'){ title=(d.winner===1?'黑棋':'白棋')+'赢了！'; text='五子连珠 🎉'; }
-        else { const mc=myColor(); if(!mc){ title=(d.winner===1?'黑棋':'白棋')+'获胜'; text=''; } else if(mc===d.winner){ title='你赢啦！'; text='记得哄哄 TA 😌'; } else { title='TA 赢了'; text='下一局扳回来！'; } }
+        else { const mc=myColor(); if(!mc){ title=(d.winner===1?'黑棋':'白棋')+'获胜'; text=''; } else if(mc===d.winner){ title='你赢啦！'; text='记得哄哄 '+T()+' 😌'; } else { title=T()+' 赢了'; text='下一局扳回来！'; } }
         modal(title, text, [{label:'看看棋盘'},{label:'再来一局',primary:true,fn:restart}]);
         if (d.winner) burst(mode==='local'||myColor()===d.winner?'🎉':'🥲');
       }, 350);
@@ -350,19 +354,19 @@
       $('roomtag').querySelector('b').textContent=code;
       const idx=ps.indexOf(myId);
       if (ps.length<2||idx<0){ $('nmB').textContent='黑棋'; $('nmW').textContent='白棋'; }
-      else { const blackIsMe=idx===(st.game%2); $('nmB').textContent=blackIsMe?'你':'TA'; $('nmW').textContent=blackIsMe?'TA':'你'; }
+      else { const blackIsMe=idx===(st.game%2); $('nmB').textContent=blackIsMe?'你':T(); $('nmW').textContent=blackIsMe?T():'你'; }
     } else { $('roomtag').textContent='同设备对弈'; $('nmB').textContent='黑棋'; $('nmW').textContent='白棋'; }
     $('plB').classList.toggle('active', !d.winner&&!d.full&&d.turn===1);
     $('plW').classList.toggle('active', !d.winner&&!d.full&&d.turn===2);
     let s='', go=false;
-    if (d.winner) s = mode==='local' ? (d.winner===1?'黑棋':'白棋')+'获胜 🎉' : (mc===d.winner?'你赢了 🎉':(mc?'TA 赢了':(d.winner===1?'黑棋':'白棋')+'获胜'));
+    if (d.winner) s = mode==='local' ? (d.winner===1?'黑棋':'白棋')+'获胜 🎉' : (mc===d.winner?'你赢了 🎉':(mc?T()+' 赢了':(d.winner===1?'黑棋':'白棋')+'获胜'));
     else if (d.full) s='平局';
     else if (online && !conn) s='连接中…';
     else if (online && ps.length<2) s='等待 TA 输入房间号 '+code+' 进来…';
     else if (online && !mc) s='观战中';
     else if (mode==='local'){ s=(d.turn===1?'黑棋':'白棋')+'落子'; go=true; }
     else if (mc===d.turn){ s='轮到你了'; go=true; }
-    else s='等 TA 下…';
+    else s='等 '+T()+' 下…';
     $('status').textContent=s; $('status').classList.toggle('go',go);
     $('copy').classList.toggle('hidden', !online);
     $('undo').disabled = !st.hist.length || d.winner>0 || (online && (!mc || ps.length<2 || !conn || undoAsked || !st.hist.some((_,i)=>(i%2===0?1:2)===mc)));
@@ -417,6 +421,7 @@
   $('join').onclick=()=>{
     const c=cleanCode($('code').value);
     if (!c){ toast('先输入一个房间号'); $('code').focus(); return; }
+    FB.setRoom(c);
     if (!window.mqtt){ toast('联机组件没加载出来，刷新试试'); return; }
     mode='online'; st={game:0,v:0,hist:[]}; announcedFor=''; undoAsked=false;
     connect(c); showGame();
@@ -424,13 +429,12 @@
   };
   function showGame(){ $('lobby').classList.add('hidden'); $('game').classList.remove('hidden'); pending=-1; requestAnimationFrame(resize); }
   function leave(){
-    disconnect(); mode=null; closeModal();
-    try { history.replaceState(null,'',location.pathname); } catch(_) {}
-    $('game').classList.add('hidden'); $('lobby').classList.remove('hidden');
+    disconnect(); closeModal();
+    location.href='../'+(mode==='online'&&code?'#'+code:''); mode=null;
   }
 
   $('netnote').textContent='把房间号发给 TA，两个人输入同一个号就会自动配对。黑棋先手，每局结束后先后手互换。';
-  const h=cleanCode(location.hash.slice(1)); if (h) $('code').value=h;
+  const h=cleanCode(location.hash.slice(1)); $('code').value = h || FB.room(); if (h) $('join').click();
 })();
 </script>
 </body>

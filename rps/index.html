@@ -147,6 +147,7 @@
 <div id="modal" class="modal hidden"><div class="card"><h3 id="mT"></h3><p id="mP"></p><div class="row" id="mBtns"></div></div></div>
 <div id="toast" class="toast"></div>
 
+<script src="../common.js"></script>
 <script src="../mqtt.min.js"></script>
 <script>
 (() => {
@@ -199,8 +200,11 @@
   function pub(sub,obj,retain){ if(client&&conn) client.publish(base+'/'+sub, obj===null?'':JSON.stringify(obj), {qos:1, retain:!!retain}); }
   function publishMe(){
     if (mode!=='online') return;
-    pub('p/'+myId, { t:Date.now(), r:me.r, locked:me.locked, c: me.revealed?me.c:null, sr:me.sr }, true);
+    pub('p/'+myId, { t:Date.now(), n:FB.name(), r:me.r, locked:me.locked, c: me.revealed?me.c:null, sr:me.sr }, true);
+    if(client&&conn) FB.hubBeat(client, code, myId, 'rps');
   }
+  const names=new Map(); const nameOf=id=>names.get(id)||'TA';
+  const T=()=>{ const o=opp(); return (o&&o.id&&names.get(o.id))||'TA'; };
   function onMessage(topic,payload){
     const sub=topic.slice(base.length+1), txt=payload.toString();
     let d=null; if(txt){ try{ d=JSON.parse(txt); }catch(_){ return; } }
@@ -208,6 +212,7 @@
       const id=sub.slice(2); if(!/^[a-z0-9]{1,16}$/.test(id)||id===myId) return;
       if(!d){ others.delete(id); }
       else if (typeof d.t==='number' && Number.isInteger(d.r) && d.r>=0){
+        if(FB.cleanName(d.n)) names.set(id, FB.cleanName(d.n));
         others.set(id,{ t:d.t, r:d.r, locked:!!d.locked, c:(d.c in EM)?d.c:null, sr:Number.isInteger(d.sr)?d.sr:0 });
       }
       checkPeers(); step();
@@ -217,8 +222,8 @@
   }
   function checkPeers(){
     const cur=new Set(presentIds());
-    cur.forEach(id=>{ if(!wasPresent.has(id)) toast('TA 来了 💕'); });
-    wasPresent.forEach(id=>{ if(!cur.has(id)) toast('TA 离开了房间'); });
+    cur.forEach(id=>{ if(!wasPresent.has(id)) toast(nameOf(id)+' 来了 💕'); });
+    wasPresent.forEach(id=>{ if(!cur.has(id)) toast(nameOf(id)+' 离开了房间'); });
     wasPresent=cur; render();
   }
   function connect(c){
@@ -232,8 +237,9 @@
     client.on('error',()=>{});
     hb=setInterval(publishMe,15000); tick=setInterval(checkPeers,5000);
   }
-  function disconnect(){ clearInterval(hb); clearInterval(tick); if(client){ try{ if(conn) pub('p/'+myId,null,true); client.end(false); }catch(_){} } client=null; conn=false; }
-  window.addEventListener('pagehide',()=>{ if(client&&conn){ try{ pub('p/'+myId,null,true); }catch(_){} } });
+  const hubClear=()=>{ try{ client.publish('hub-duo-v1/'+code+'/p/'+myId,'',{qos:1,retain:true}); }catch(_){} };
+  function disconnect(){ clearInterval(hb); clearInterval(tick); if(client){ try{ if(conn) pub('p/'+myId,null,true); hubClear(); client.end(false); }catch(_){} } client=null; conn=false; }
+  window.addEventListener('pagehide',()=>{ if(client&&conn){ try{ pub('p/'+myId,null,true); hubClear(); }catch(_){} } });
 
   // ---------- core round logic ----------
   function step(){
@@ -283,7 +289,7 @@
       $('hOpp').className='hand opp'+(res<0?' win':res>0?' lose':'');
       $('eMe').textContent=EM[mc]; $('eOpp').textContent=EM[oc];
       if (res>0){ st.textContent='你赢了！'+NAME[mc]+' 赢 '+NAME[oc]; st.className='status win'; burst('🎉'); }
-      else if (res<0){ st.textContent=(mode==='bot'?'电脑':'TA')+'赢了… '+NAME[oc]+' 赢 '+NAME[mc]; st.className='status lose'; }
+      else if (res<0){ st.textContent=(mode==='bot'?'电脑':T())+'赢了… '+NAME[oc]+' 赢 '+NAME[mc]; st.className='status lose'; }
       else { st.textContent='平局，都出了'+NAME[mc]; st.className='status'; }
       render(true);
     }, 1000);
@@ -304,7 +310,7 @@
     if (online){ $('roomtag').innerHTML='<span class="dot '+(conn&&others_n?'on':'')+'"></span>房间 <b></b>'; $('roomtag').querySelector('b').textContent=code; }
     else $('roomtag').textContent='和电脑练手';
     $('copy').classList.toggle('hidden',!online); $('reacts').classList.toggle('hidden',!online);
-    const oname = mode==='bot'?'电脑':'TA';
+    const oname = mode==='bot'?'电脑':T();
     $('oppName').textContent=oname; $('lOpp').textContent=oname;
     $('sMe').textContent=score.me; $('sOpp').textContent=score.opp; $('sTie').textContent=score.tie;
     $('hist').innerHTML=score.hist.map(r=>r>0?'<i class="w">赢</i>':r<0?'<i class="l">输</i>':'<i>平</i>').join('');
@@ -334,7 +340,7 @@
   $('reset').onclick=()=>modal('比分清零？', mode==='online'?'你们俩的比分都会归零':'', [{label:'取消'},{label:'清零',primary:true,fn:resetScore}]);
   $('reacts').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; const n=Date.now(); if(n-(b._t||0)<400) return; b._t=n; floatEmoji(b.textContent); pub('e',{t:'react',e:b.textContent,from:myId}); });
   $('copy').onclick=()=>{ const link=location.origin+location.pathname+'#'+code; const txt='来玩石头剪刀布！打开 '+link+' ，房间号：'+code; try{ navigator.clipboard.writeText(txt).then(()=>toast('邀请已复制，发给 TA 吧'),()=>toast('房间号：'+code)); }catch(_){ toast('房间号：'+code); } };
-  $('leave').onclick=()=>{ disconnect(); mode=null; botState=null; try{ history.replaceState(null,'',location.pathname); }catch(_){} $('game').classList.add('hidden'); $('lobby').classList.remove('hidden'); };
+  $('leave').onclick=()=>{ const back='../'+(mode==='online'&&code?'#'+code:''); disconnect(); mode=null; botState=null; location.href=back; };
 
   const clean=v=>(v||'').toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,12);
   $('code').addEventListener('input',e=>{ const c=clean(e.target.value); if(c!==e.target.value) e.target.value=c; });
@@ -345,10 +351,10 @@
   $('join').onclick=()=>{
     const c=clean($('code').value); if(!c){ toast('先输入一个房间号'); $('code').focus(); return; }
     if(!window.mqtt){ toast('联机组件没加载出来，刷新试试'); return; }
-    mode='online'; code=c; start(); connect(c); step();
+    FB.setRoom(c); mode='online'; code=c; start(); connect(c); step();
     try{ history.replaceState(null,'','#'+c); }catch(_){}
   };
-  const h=clean(location.hash.slice(1)); if(h) $('code').value=h;
+  const h=clean(location.hash.slice(1)); $('code').value = h || FB.room(); if(h) $('join').click();
 })();
 </script>
 </body>

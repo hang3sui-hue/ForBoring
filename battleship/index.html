@@ -157,6 +157,7 @@
 <div id="modal" class="modal hidden"><div class="card"><h3 id="mT"></h3><p id="mP"></p><div class="row" id="mBtns"></div></div></div>
 <div id="toast" class="toast"></div>
 
+<script src="../common.js"></script>
 <script src="../mqtt.min.js"></script>
 <script>
 (() => {
@@ -184,7 +185,8 @@
   function modal(title,text,btns){ $('mT').textContent=title; $('mP').textContent=text; const b=$('mBtns'); b.innerHTML=''; btns.forEach(x=>{ const e=document.createElement('button'); e.textContent=x.label; if(x.primary) e.className='primary'; e.onclick=()=>{ $('modal').classList.add('hidden'); x.fn&&x.fn(); }; b.appendChild(e); }); $('modal').classList.remove('hidden'); }
   function floatEmoji(e){ const el=document.createElement('div'); el.className='float'; el.textContent=e; el.style.left=(10+Math.random()*75)+'vw'; document.body.appendChild(el); setTimeout(()=>el.remove(),2300); }
   function burst(e){ for(let i=0;i<8;i++) setTimeout(()=>floatEmoji(e),i*120); }
-  const oname=()=> mode==='bot'?'电脑':'TA';
+  const names=new Map(); const nameOf=id=>names.get(id)||'TA';
+  const oname=()=>{ if(mode==='bot') return '电脑'; const o=opp(); return (o&&names.get(o.id))||'TA'; };
 
   function shipCells(x,y,len,h){ const c=[]; for(let k=0;k<len;k++){ const xx=h?x+k:x, yy=h?y:y+k; if(xx>=S||yy>=S) return null; c.push(yy*S+xx);} return c; }
   function randomFleet(){
@@ -252,7 +254,8 @@
   function publishMe(){
     if(mode!=='online'||!me) return;
     const a=myAns(), ov=over();
-    pub('p/'+myId, { t:Date.now(), g:me.g, ready:me.ready, fired:me.fired, ans:a.ans, sunk:a.sunk, fleet: ov?me.fleet:null, k: me.ready&&me.fleet?enc(me.fleet):'' }, true);
+    if(client&&conn) FB.hubBeat(client, code, myId, 'battleship');
+    pub('p/'+myId, { t:Date.now(), n:FB.name(), g:me.g, ready:me.ready, fired:me.fired, ans:a.ans, sunk:a.sunk, fleet: ov?me.fleet:null, k: me.ready&&me.fleet?enc(me.fleet):'' }, true);
   }
   function validIdxs(a){ if(!Array.isArray(a)||a.length>S*S) return false; const s=new Set(); for(const v of a){ if(!Number.isInteger(v)||v<0||v>=S*S||s.has(v)) return false; s.add(v);} return true; }
   function validShips(a){ return Array.isArray(a) && a.length<=SHIPS.length && a.every(s=>s&&Number.isInteger(s.i)&&s.i>=0&&s.i<SHIPS.length&&validIdxs(s.cells)&&s.cells.length===SHIPS[s.i].len); }
@@ -263,6 +266,7 @@
       const id=sub.slice(2); if(!/^[a-z0-9]{1,16}$/.test(id)||id===myId) return;
       if(!d){ others.delete(id); }
       else if(typeof d.t==='number' && Number.isInteger(d.g) && d.g>=0 && validIdxs(d.fired)){
+        if(FB.cleanName(d.n)) names.set(id, FB.cleanName(d.n));
         const prev=others.get(id);
         others.set(id,{ t:d.t, g:d.g, ready:!!d.ready, fired:d.fired, ans:typeof d.ans==='string'&&/^[mhs]*$/.test(d.ans)?d.ans:'', sunk:validShips(d.sunk)?d.sunk:[], fleet:validShips(d.fleet)?d.fleet:null, k:typeof d.k==='string'?dec(d.k):null });
         const o=others.get(id);
@@ -277,8 +281,8 @@
   }
   function checkPeers(){
     const cur=new Set(presentIds());
-    cur.forEach(id=>{ if(!wasPresent.has(id)) toast('TA 来了 💕'); });
-    wasPresent.forEach(id=>{ if(!cur.has(id)) toast('TA 离开了房间'); });
+    cur.forEach(id=>{ if(!wasPresent.has(id)) toast(nameOf(id)+' 来了 💕'); });
+    wasPresent.forEach(id=>{ if(!cur.has(id)) toast(nameOf(id)+' 离开了房间'); });
     wasPresent=cur; render();
   }
   function connect(c){
@@ -292,8 +296,9 @@
     client.on('error',()=>{});
     hb=setInterval(publishMe,15000); tick=setInterval(checkPeers,5000);
   }
-  function disconnect(){ clearInterval(hb); clearInterval(tick); if(client){ try{ if(conn) pub('p/'+myId,null,true); client.end(false); }catch(_){} } client=null; conn=false; }
-  window.addEventListener('pagehide',()=>{ if(client&&conn){ try{ pub('p/'+myId,null,true); }catch(_){} } });
+  const hubClear=()=>{ try{ client.publish('hub-duo-v1/'+code+'/p/'+myId,'',{qos:1,retain:true}); }catch(_){} };
+  function disconnect(){ clearInterval(hb); clearInterval(tick); if(client){ try{ if(conn) pub('p/'+myId,null,true); hubClear(); client.end(false); }catch(_){} } client=null; conn=false; }
+  window.addEventListener('pagehide',()=>{ if(client&&conn){ try{ pub('p/'+myId,null,true); hubClear(); }catch(_){} } });
 
   // ---------- persistence ----------
   const skey=()=>'bs-'+code;
@@ -507,7 +512,7 @@
     if(seq.join('')==='1111111177'){ seq=[]; xray=!xray; render(); }
     const n=Date.now(); if(n-(b._t||0)<400) return; b._t=n; floatEmoji(b.textContent); pub('e',{t:'react',e:b.textContent,from:myId}); });
   $('copy').onclick=()=>{ const link=location.origin+location.pathname+'#'+code; const txt='来玩海战棋！打开 '+link+' ，房间号：'+code; try{ navigator.clipboard.writeText(txt).then(()=>toast('邀请已复制，发给 TA 吧'),()=>toast('房间号：'+code)); }catch(_){ toast('房间号：'+code); } };
-  $('leave').onclick=()=>{ disconnect(); mode=null; me=null; bot=null; $('modal').classList.add('hidden'); try{ history.replaceState(null,'',location.pathname); }catch(_){} $('game').classList.add('hidden'); $('lobby').classList.remove('hidden'); };
+  $('leave').onclick=()=>{ const back='../'+(mode==='online'&&code?'#'+code:''); disconnect(); mode=null; me=null; bot=null; location.href=back; };
 
   const clean=v=>(v||'').toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,12);
   $('code').addEventListener('input',e=>{ const c=clean(e.target.value); if(c!==e.target.value) e.target.value=c; });
@@ -518,14 +523,14 @@
   $('join').onclick=()=>{
     const c=clean($('code').value); if(!c){ toast('先输入一个房间号'); $('code').focus(); return; }
     if(!window.mqtt){ toast('联机组件没加载出来，刷新试试'); return; }
-    mode='online'; code=c; overShown=-1; show();
+    FB.setRoom(c); mode='online'; code=c; overShown=-1; show();
     const saved=load();
     if(saved){ me=saved; draft=me.fleet?me.fleet.map(s=>({i:s.i,cells:s.cells.slice()})):[]; selShip=draft.length?-1:0; seenMine=0; seenTheirs=0; }
     else { me={g:0,fleet:null,ready:false,fired:[]}; draft=[]; selShip=0; }
     connect(c); render();
     try{ history.replaceState(null,'','#'+c); }catch(_){}
   };
-  const h=clean(location.hash.slice(1)); if(h) $('code').value=h;
+  const h=clean(location.hash.slice(1)); $('code').value = h || FB.room(); if(h) $('join').click();
 })();
 </script>
 </body>
