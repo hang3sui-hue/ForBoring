@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>抽积木 · ForBoring</title>
+<link rel="stylesheet" href="../common.css">
+<style>
+  body{user-select:none;-webkit-user-select:none}
+  .view{position:relative;height:430px;border-radius:22px;overflow:hidden;background:radial-gradient(ellipse at 50% 30%,#fffaf2 0%,#efe2d0 70%,#e4d3bd 100%);border:1px solid var(--line);perspective:1100px;touch-action:none;cursor:grab}
+  .floor{position:absolute;left:0;right:0;bottom:0;height:70px;background:linear-gradient(#e2cfb5,#d8c1a2)}
+  #scene{position:absolute;left:50%;top:0;transform-style:preserve-3d}
+  #tower{transform-style:preserve-3d}
+  .blk{position:absolute;left:0;top:0;transform-style:preserve-3d}
+  .f{position:absolute;backface-visibility:hidden;-webkit-backface-visibility:hidden;box-shadow:inset 0 0 0 .5px rgba(90,55,20,.35)}
+  .blk.sel .f{background:#f2a3ae!important;box-shadow:inset 0 0 0 1.5px var(--accent)}
+  .blk.rsel .f{background:#a9cbe6!important;box-shadow:inset 0 0 0 1.5px #4a86b8}
+  .blk.ban .f{opacity:.97}
+  .falling{transition:transform 1.5s cubic-bezier(.45,.05,.75,.6)}
+  .meter{display:flex;align-items:center;gap:10px;margin-top:12px;font-size:12px;color:var(--muted)}
+  .meter .track{flex:1;height:10px;border-radius:6px;background:#efe5d8;overflow:hidden}
+  .meter i{display:block;height:100%;width:0;background:linear-gradient(90deg,#7cc39a,#f0b45e,#e0455a);transition:width .08s}
+  .pull{position:relative;width:100%;margin-top:12px;padding:18px;font-size:18px;overflow:hidden;background:var(--accent);color:#fff;touch-action:none}
+  .pull i{position:absolute;left:0;top:0;bottom:0;width:0;background:rgba(255,255,255,.28)}
+  .pull span{position:relative}
+  .pull:disabled{background:#d8c8b8}
+  .rot{position:absolute;top:10px;display:flex;gap:6px;z-index:2}
+  .rot button{padding:6px 10px;font-size:16px;background:rgba(255,250,244,.85);border:1px solid var(--line)}
+  .info{position:absolute;left:12px;bottom:10px;font-size:12px;color:#8a7258;z-index:2}
+  .tips{font-size:12px;color:var(--muted);text-align:center;margin-top:8px;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section id="lobby">
+    <a class="back" href="../">‹ 返回主页</a>
+    <h1>抽积木</h1>
+    <p class="sub">轮流从塔里抽一块积木放到最上面。按住慢慢抽，塔会晃……谁把塔弄倒谁输 🧱</p>
+    <div class="card">
+      <label for="code">房间号（字母或数字）</label>
+      <div class="row">
+        <input id="code" maxlength="12" placeholder="比如 love520" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <button id="rand" class="ghost">🎲</button>
+      </div>
+      <button id="join" class="primary block">进入房间</button>
+      <div class="divider">或者</div>
+      <button id="local" class="ghost block" style="margin-top:6px">同一台手机轮流玩</button>
+    </div>
+  </section>
+
+  <section id="game" class="hidden">
+    <div class="topbar">
+      <div class="roomtag" id="roomtag"></div>
+      <div class="row" style="gap:6px">
+        <button id="copy" class="ghost small">复制邀请</button>
+        <button id="leave" class="ghost small">离开</button>
+      </div>
+    </div>
+    <div class="status" id="status"></div>
+    <div class="view" id="view">
+      <div class="floor"></div>
+      <div class="rot" style="right:10px"><button id="rotL">⟲</button><button id="rotR">⟳</button></div>
+      <div class="info" id="info"></div>
+      <div id="scene"><div id="tower"></div></div>
+    </div>
+    <div class="meter"><span>晃动</span><div class="track"><i id="meter"></i></div><span id="meterTxt">稳</span></div>
+    <button class="pull" id="pull" disabled><i id="pullFill"></i><span id="pullTxt">先点一块积木</span></button>
+    <div class="tips">左右拖动可以转视角 · 抽的时候塔晃得厉害就先松手等它稳下来</div>
+    <div class="row" style="margin-top:12px"><button id="again" class="ghost" style="flex:1">重开一局</button></div>
+    <div class="reacts" id="reacts"></div>
+  </section>
+</div>
+
+<div id="modal" class="modal hidden"><div class="card"><h3 id="mT"></h3><p id="mP"></p><div class="row" id="mBtns"></div></div></div>
+<div id="toast" class="toast"></div>
+
+<script src="../common.js"></script>
+<script src="../mqtt.min.js"></script>
+<script>
+(() => {
+  const ui=FB.ui, $=id=>document.getElementById(id);
+  const U=26, L=3*U, W=U, H=Math.round(0.62*U), LEVELS=18;
+  let mode=null, net=null, code='', st=null;
+  let angle=35, sel=null, rsel=null;                  // sel = [lvl,i]
+  let pulling=false, prog=0, wob=0, risk=0, busy=false; // local pull
+  let remote={p:0,w:0,at:0};                          // partner's live pull
+  let collapsedKey='', lastFrame=0;
+
+  const ME=()=> mode==='local' ? turnId() : net.myId;
+  const turnId=()=> st ? st.players[(st.game+st.moves)%2] : null;
+  const nameOf=id=> mode==='local' ? (id==='p1'?'玩家 1':'玩家 2') : (id===net.myId?'你':net.nameOf(id));
+  const myTurn=()=> st && !st.loser && (mode==='local' || turnId()===net.myId);
+
+  // ---------- state ----------
+  function fresh(game, players){
+    const tower=[]; let id=0; for(let l=0;l<LEVELS;l++) tower.push([id++,id++,id++]);
+    return { game, v:0, tower, moves:0, players, loser:null, seed:0 };
+  }
+  function valid(s){
+    if(!s||!Number.isInteger(s.game)||!Number.isInteger(s.v)||!Number.isInteger(s.moves)||!Array.isArray(s.tower)||s.tower.length>80||!Array.isArray(s.players)||s.players.length!==2) return false;
+    return s.tower.every(l=>Array.isArray(l)&&l.length===3&&l.every(x=>Number.isInteger(x)&&x>=-1&&x<54));
+  }
+  const newer=s=>!st||s.game>st.game||(s.game===st.game&&s.v>st.v);
+  function commit(s){ st=s; sel=null; prog=0; wob=0; pulling=false; build(); render(); if(mode==='online') net.setState(s); checkCollapse(); }
+
+  function topIdx(t){ for(let l=t.length-1;l>=0;l--) if(t[l].some(x=>x>=0)) return l; return -1; }
+  function allowed(lvl,i){
+    const t=st.tower, top=topIdx(t); if(t[lvl][i]<0) return false;
+    const full=t[top].every(x=>x>=0);
+    return full ? lvl<top : lvl<top-1;
+  }
+  function riskOf(lvl,i){
+    const t=st.tower, row=t[lvl].slice(); row[i]=-1;
+    const left=row.filter(x=>x>=0).length;
+    if(left===0) return 6;
+    if(left===1 && row[1]<0) return 4;          // only one side block left: will tip
+    const above=topIdx(t)-lvl;
+    let r=0.32 + above*0.012 + st.moves*0.012;
+    if(i!==1 && row[1]>=0 && left===2) r+=0.08;  // side block, others remain
+    if(i===1) r-=0.06;
+    if(lvl<=2) r+=0.06;                          // bottom carries the most weight
+    return Math.max(0.18, r);
+  }
+
+  // ---------- 3D build ----------
+  function shade(id){ const h=28+((id*37)%14), l=60+((id*53)%12); return { top:`hsl(${h} 52% ${l+8}%)`, side:`hsl(${h} 50% ${l}%)`, end:`hsl(${h} 45% ${l-12}%)` }; }
+  function face(w,h,bg,tr){ const d=document.createElement('div'); d.className='f'; d.style.cssText=`width:${w}px;height:${h}px;left:${-w/2}px;top:${-h/2}px;background:${bg};transform:${tr}`; return d; }
+  const blocks=new Map(); // id -> el
+  function blockPos(lvl,i){
+    const y=-(lvl+0.5)*H, off=(i-1)*W, even=lvl%2===0;
+    return even ? {x:0,y,z:off,ry:0} : {x:off,y,z:0,ry:90};
+  }
+  function build(){
+    const tw=$('tower'); tw.innerHTML=''; blocks.clear(); tw.style.transform='';
+    st.tower.forEach((row,lvl)=>row.forEach((id,i)=>{
+      if(id<0) return;
+      const c=shade(id), b=document.createElement('div'); b.className='blk'; b.dataset.l=lvl; b.dataset.i=i;
+      b.appendChild(face(L,H,c.side,`translateZ(${W/2}px)`));
+      b.appendChild(face(L,H,c.side,`rotateY(180deg) translateZ(${W/2}px)`));
+      b.appendChild(face(W,H,c.end,`rotateY(90deg) translateZ(${L/2}px)`));
+      b.appendChild(face(W,H,c.end,`rotateY(-90deg) translateZ(${L/2}px)`));
+      b.appendChild(face(L,W,c.top,`rotateX(90deg) translateZ(${H/2}px)`));
+      tw.appendChild(b); blocks.set(lvl+','+i,b); place(b,lvl,i,0);
+    }));
+  }
+  function pullDir(lvl){ // sign that slides the block toward the camera
+    const a=angle*Math.PI/180, even=lvl%2===0;
+    const v = even ? [1,0] : [0,-1];            // world (x,z) of local +X
+    const zView = -Math.sin(a)*v[0] + Math.cos(a)*v[1];
+    return zView>=0?1:-1;
+  }
+  function place(b,lvl,i,p){
+    const q=blockPos(lvl,i), s=pullDir(lvl)*p*L*1.08;
+    b.style.transform=`translate3d(${q.x}px,${q.y}px,${q.z}px) rotateY(${q.ry}deg) translateX(${s}px)`;
+  }
+  function camera(sway){
+    const levels=Math.max(LEVELS, topIdx(st?st.tower:[])+1);
+    const th=levels*H, vh=$('view').clientHeight, scale=Math.min(1.15,(vh-120)/th);
+    const sx=sway?sway.x:0, sz=sway?sway.z:0;
+    $('scene').style.transform=`translate3d(0,${vh-78}px,0) scale(${scale}) rotateX(-18deg) rotateY(${angle}deg)`;
+    $('tower').style.transform=`rotateZ(${sx}deg) rotateX(${sz}deg)`;
+  }
+
+  // ---------- render ----------
+  function render(){
+    ui.roomTag(mode==='online'?net:null, code, '同一台手机轮流玩');
+    $('copy').classList.toggle('hidden', mode!=='online'); $('reacts').classList.toggle('hidden', mode!=='online');
+    const s=$('status'); s.className='status';
+    if(!st){ s.textContent = mode==='online'&&!net.connected() ? '连接中…' : '等待 TA 输入房间号 '+code+' 进来…'; $('pull').disabled=true; return; }
+    if(st.loser) s.textContent = nameOf(st.loser)+' 把塔弄倒了 💥';
+    else if(myTurn()){ s.textContent = mode==='local' ? '轮到 '+nameOf(turnId())+' 抽' : '轮到你抽！'; s.className='status go'; }
+    else s.textContent = '等 '+nameOf(turnId())+' 抽…';
+    blocks.forEach((b,k)=>{ const [l,i]=k.split(',').map(Number); b.classList.toggle('sel', !!sel&&sel[0]===l&&sel[1]===i); b.classList.toggle('rsel', !!rsel&&rsel[0]===l&&rsel[1]===i && !myTurn()); });
+    const can=myTurn() && !!sel && !busy;
+    $('pull').disabled=!can;
+    $('pullTxt').textContent = !myTurn() ? (st.loser?'塔倒了':'等对方抽') : (!sel ? '先点一块积木' : (pulling?'抽…抽…':'按住抽出'));
+    $('info').textContent='第 '+(st.moves+1)+' 抽 · '+(topIdx(st.tower)+1)+' 层';
+    $('again').textContent = st.loser ? '再来一局' : '重开一局';
+    camera();
+  }
+
+  // ---------- frame loop ----------
+  function frame(t){
+    const dt=Math.min(0.05,(t-(lastFrame||t))/1000); lastFrame=t;
+    if(st && !st.loser && !busy){
+      let p=0, w=0, target=null;
+      if(myTurn() && sel){
+        if(pulling){ prog=Math.min(1,prog+dt*0.38); wob+= dt*risk*(0.55+Math.random()*0.6); if(Math.random()<dt*0.9) wob+=risk*0.12*Math.random(); }
+        else wob=Math.max(0, wob-dt*0.55);
+        p=prog; w=wob; target=sel;
+        if(mode==='online' && t-(frame._s||0)>110){ frame._s=t; net.emit('pull',{l:sel[0],i:sel[1],p:+prog.toFixed(3),w:+wob.toFixed(3)}); }
+        if(wob>=1){ collapse(); requestAnimationFrame(frame); return; }
+        if(prog>=1){ success(); requestAnimationFrame(frame); return; }
+      } else if(rsel && Date.now()-remote.at<1500){ p=remote.p; w=remote.w; target=rsel; }
+      blocks.forEach((b,k)=>{ const [l,i]=k.split(',').map(Number); place(b,l,i, target&&target[0]===l&&target[1]===i ? p : 0); });
+      const amp=w*w*4.5, ph=t/1000;
+      camera({ x:Math.sin(ph*7.3)*amp, z:Math.sin(ph*5.1+1)*amp*0.6 });
+      $('meter').style.width=Math.min(100,w*100)+'%';
+      $('meterTxt').textContent = w<0.35?'稳':(w<0.7?'晃':'危险!');
+      $('pullFill').style.width=(p*100)+'%';
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  function success(){
+    const [l,i]=sel, s=JSON.parse(JSON.stringify(st)), id=s.tower[l][i];
+    s.tower[l][i]=-1;
+    const top=topIdx(s.tower);
+    if(s.tower[top].every(x=>x>=0)) s.tower.push([id,-1,-1]);
+    else { const slot=[0,2,1].find(k=>s.tower[top][k]<0); s.tower[top][slot]=id; }
+    s.moves++; s.v++;
+    try{ navigator.vibrate&&navigator.vibrate(30); }catch(_){}
+    ui.toast('抽出来了 ✨');
+    if(mode==='online') net.emit('pull',{l:-1,i:-1,p:0,w:0});
+    commit(s);
+  }
+  function collapse(){
+    const s=JSON.parse(JSON.stringify(st)); s.loser=turnId(); s.seed=1+Math.floor(Math.random()*1e6); s.v++;
+    commit(s);
+  }
+  function rng(seed){ let x=seed||1; return ()=>{ x=(x*16807)%2147483647; return x/2147483647; }; }
+  function checkCollapse(){
+    if(!st||!st.loser) return;
+    const key=st.game+':'+st.v; if(collapsedKey===key) return; collapsedKey=key;
+    busy=true; const r=rng(st.seed);
+    try{ navigator.vibrate&&navigator.vibrate([60,40,200]); }catch(_){}
+    const dirx=r()<.5?-1:1; void $('tower').offsetWidth;
+    blocks.forEach((b,k)=>{
+      const [l,i]=k.split(',').map(Number), q=blockPos(l,i);
+      const spread=(l*H)*0.55 + W;
+      const dx=Math.max(-150,Math.min(150, q.x + dirx*spread*(0.5+r()*0.6) + (r()-.5)*W*1.5)), dz=q.z + (r()-.5)*spread*1.2;
+      const gy=-H/2 - r()*H*1.5;
+      b.classList.add('falling'); b.style.transitionDelay=((LEVELS-l)*0.025+r()*0.08)+'s';
+      b.style.transform=`translate3d(${dx}px,${gy}px,${dz}px) rotateY(${q.ry+(r()-.5)*160}deg) rotateZ(${(r()-.5)*70}deg) rotateX(${(r()-.5)*50}deg)`;
+    });
+    $('tower').style.transform='';
+    setTimeout(()=>{
+      const meLost = mode==='online' && st.loser===net.myId;
+      const title = mode==='local' ? nameOf(st.loser)+' 把塔弄倒了！' : (meLost ? '塔被你弄倒了 💥' : nameOf(st.loser)+' 把塔弄倒了！');
+      ui.modal(title, '一共抽了 '+st.moves+' 块', [{label:'看看'},{label:'再来一局',primary:true,fn:restart}]);
+      if(mode==='online' && !meLost) ui.burst('😂');
+    }, 1700);
+  }
+  function restart(){
+    const players = mode==='local' ? ['p1','p2'] : net.order();
+    if(players.length<2){ ui.toast('等 TA 进来再开'); return; }
+    busy=false; collapsedKey=''; commit(fresh((st?st.game:-1)+1, players));
+  }
+
+  // ---------- input: rotate / select ----------
+  const view=$('view'); let down=null;
+  view.addEventListener('pointerdown',e=>{ if(e.target.closest('.rot')) return; down={x:e.clientX, a:angle, moved:false, el:e.target}; view.setPointerCapture(e.pointerId); });
+  view.addEventListener('pointermove',e=>{ if(!down) return; const dx=e.clientX-down.x; if(Math.abs(dx)>6) down.moved=true; if(down.moved){ angle=down.a+dx*0.5; if(st) { render(); } } });
+  view.addEventListener('pointerup',e=>{
+    if(!down) return; const d=down; down=null;
+    if(d.moved||!st||busy) return;
+    const b=d.el.closest&&d.el.closest('.blk'); if(!b){ if(myTurn()&&!pulling){ sel=null; prog=0; render(); } return; }
+    if(!myTurn()){ ui.toast(st.loser?'塔已经倒了':'还没轮到你'); return; }
+    const l=+b.dataset.l, i=+b.dataset.i;
+    if(!allowed(l,i)){ ui.toast('最上面两层不能抽哦'); return; }
+    if(prog>0 && sel && (sel[0]!==l||sel[1]!==i)){ ui.toast('已经抽了一半，换不了啦'); return; }
+    sel=[l,i]; risk=riskOf(l,i); render();
+    if(mode==='online') net.emit('sel',{l,i});
+  });
+  $('rotL').onclick=()=>{ angle-=45; render(); };
+  $('rotR').onclick=()=>{ angle+=45; render(); };
+
+  const pb=$('pull');
+  const startPull=e=>{ e.preventDefault(); if(pb.disabled) return; pulling=true; render(); };
+  const stopPull=()=>{ if(pulling){ pulling=false; render(); } };
+  pb.addEventListener('pointerdown',startPull);
+  ['pointerup','pointercancel','pointerleave'].forEach(ev=>pb.addEventListener(ev,stopPull));
+  pb.addEventListener('contextmenu',e=>e.preventDefault());
+
+  $('again').onclick=()=>{ if(!st||st.loser||!st.moves) restart(); else ui.modal('重开一局？','塔会重新搭好',[{label:'取消'},{label:'重开',primary:true,fn:restart}]); };
+  $('copy').onclick=()=>ui.copyInvite(code,'抽积木');
+  $('leave').onclick=()=>{ const back='../'+(mode==='online'?'#'+code:''); if(net) net.close(); location.href=back; };
+  ui.reacts(()=>net);
+
+  function show(){ $('lobby').classList.add('hidden'); $('game').classList.remove('hidden'); }
+  ui.lobby({
+    onJoin(c){
+      mode='online'; code=c; show();
+      net=FB.net('jenga', c, {
+        onConn(){ render(); },
+        onPeers(joined,left){
+          joined.forEach(i=>ui.toast(net.nameOf(i)+' 来了 💕')); left.forEach(i=>ui.toast(net.nameOf(i)+' 离开了房间'));
+          if(joined.length && st) net.setState(st);
+          if(!st && net.order().length===2 && net.order()[0]===net.myId) restart();
+          render();
+        },
+        onState(s){
+          if(!valid(s)||!newer(s)) return;
+          if(st && s.game>st.game){ ui.close(); busy=false; collapsedKey=''; }
+          st=s; sel=null; rsel=null; prog=0; wob=0; pulling=false; build(); render(); checkCollapse();
+        },
+        onEvent(d){
+          if(d.t==='react' && ui.EMO.includes(d.e)) ui.float(d.e);
+          if(!st||myTurn()) return;
+          if(d.t==='sel' && Number.isInteger(d.l) && Number.isInteger(d.i)){ rsel=[d.l,d.i]; remote={p:0,w:0,at:Date.now()}; render(); }
+          if(d.t==='pull' && Number.isInteger(d.l)){
+            if(d.l<0){ rsel=null; return; }
+            rsel=[d.l,d.i]; remote={ p:Math.max(0,Math.min(1,+d.p||0)), w:Math.max(0,Math.min(1.2,+d.w||0)), at:Date.now() };
+          }
+        }
+      });
+      render();
+    },
+    onLocal(){ mode='local'; code=''; show(); restart(); }
+  });
+})();
+</script>
+</body>
+</html>
