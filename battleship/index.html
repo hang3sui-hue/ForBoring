@@ -80,7 +80,7 @@
   .legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
 
   .reacts{display:flex;justify-content:space-between;margin-top:14px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:6px}
-  .reacts button{background:transparent;font-size:22px;padding:6px 2px;flex:1;min-width:0}
+  .reacts button{background:transparent;font-size:20px;padding:6px 1px;flex:1;min-width:0}
   .c.xr{background:#a9c6d6}
   .float{position:fixed;bottom:80px;font-size:34px;pointer-events:none;animation:up 2.2s ease-out forwards;z-index:50}
   @keyframes up{0%{transform:translateY(0) scale(.6);opacity:0}15%{opacity:1;transform:translateY(-30px) scale(1.15)}100%{transform:translateY(-55vh) scale(1);opacity:0}}
@@ -149,7 +149,7 @@
     </div>
 
     <div class="reacts" id="reacts">
-      <button>❤️</button><button>😘</button><button>😂</button><button>😤</button><button>👍</button><button>🥺</button><button>🎉</button><button>🥲</button>
+      <button>❤️</button><button>😘</button><button>😂</button><button>😤</button><button>👍</button><button>🥺</button><button>🎉</button><button>🥲</button><button>🙈</button>
     </div>
   </section>
 </div>
@@ -164,7 +164,7 @@
   const BROKER='wss://broker-cn.emqx.io:8084/mqtt', NS='bs-duo-v1', ALIVE_MS=45000, S=10;
   const SHIPS=[{n:'航母',len:5},{n:'战列舰',len:4},{n:'巡洋舰',len:3},{n:'潜艇',len:3},{n:'驱逐舰',len:2}];
   const TOTAL=SHIPS.reduce((a,s)=>a+s.len,0);
-  const EMO=['❤️','😘','😂','😤','👍','🥺','🎉','🥲'];
+  const EMO=['❤️','😘','😂','😤','👍','🥺','🎉','🥲','🙈'];
   const $=id=>document.getElementById(id);
 
   let myId; try{ myId=localStorage.getItem('wzq-id'); }catch(_){}
@@ -508,8 +508,8 @@
 
   // ---------- misc ----------
   $('reacts').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return;
-    seq.push([...$('reacts').children].indexOf(b)); if(seq.length>10) seq.shift();
-    if(seq.join('')==='1111111177'){ seq=[]; xray=!xray; render(); }
+    seq.push([...$('reacts').children].indexOf(b)); if(seq.length>7) seq.shift();
+    if(seq.join('')==='0014785'){ seq=[]; xray=!xray; render(); }
     const n=Date.now(); if(n-(b._t||0)<400) return; b._t=n; floatEmoji(b.textContent); pub('e',{t:'react',e:b.textContent,from:myId}); });
   $('copy').onclick=()=>{ const link=location.origin+location.pathname+'#'+code; const txt='来玩海战棋！打开 '+link+' ，房间号：'+code; try{ navigator.clipboard.writeText(txt).then(()=>toast('邀请已复制，发给 TA 吧'),()=>toast('房间号：'+code)); }catch(_){ toast('房间号：'+code); } };
   $('leave').onclick=()=>{ const back='../'+(mode==='online'&&code?'#'+code:''); disconnect(); mode=null; me=null; bot=null; location.href=back; };
