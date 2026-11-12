@@ -27,19 +27,21 @@
   .who i{width:7px;height:7px;border-radius:50%;background:#4caf7a;display:inline-block}
   .who em{font-style:normal;color:var(--muted);font-size:12px}
   .sec{font-size:15px;font-weight:700;margin:22px 0 10px}
-  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  .game{position:relative;display:flex;flex-direction:column;gap:6px;text-decoration:none;color:inherit;background:var(--card);border:1.5px solid var(--line);border-radius:18px;padding:18px 16px 16px;min-height:150px;transition:transform .12s,box-shadow .2s,border-color .2s;cursor:pointer}
+  .grid{display:flex;flex-direction:column;gap:10px}
+  .game{position:relative;display:flex;flex-direction:row;align-items:center;gap:14px;text-decoration:none;color:inherit;background:var(--card);border:1.5px solid var(--line);border-radius:18px;padding:14px 16px;transition:transform .12s,box-shadow .2s,border-color .2s;cursor:pointer}
+  .game>div:not(.ic):not(.board){flex:1;min-width:0}
+  a.game::after{content:"›";font-size:26px;color:#c9b8a6;margin-left:4px}
   a.game:hover{border-color:var(--accent);box-shadow:0 8px 24px rgba(217,88,107,.12)}
   a.game:active{transform:scale(.97)}
-  .game .ic{font-size:34px;line-height:1;margin-bottom:6px}
-  .game .nm{font-weight:700;font-size:17px}
-  .game .ds{font-size:13px;color:var(--muted);line-height:1.5}
-  .game.feat{grid-column:1 / -1;flex-direction:row;align-items:center;gap:16px;min-height:0;padding:18px}
-  .game.feat .go{margin-left:auto;background:var(--accent);color:#fff;border-radius:12px;padding:10px 16px;font-size:14px;font-weight:500;white-space:nowrap}
+  .game .ic{width:52px;height:52px;flex:none;display:flex;align-items:center;justify-content:center;font-size:30px;line-height:1;border-radius:14px;background:#f3e9dc}
+  .game .ic2{font-size:17px;letter-spacing:-2px}
+  .game.soon .ds{padding-right:64px}
+  .game .nm{font-weight:700;font-size:16px;margin-bottom:2px}
+  .game .ds{font-size:12.5px;color:var(--muted);line-height:1.45}
+  .game.feat .go{display:none}
   .game.soon{opacity:.55;cursor:default}
-  .tag{position:absolute;top:12px;right:12px;font-size:11px;background:#efe5d8;color:var(--muted);border-radius:8px;padding:3px 7px}
-  .here{position:absolute;top:12px;right:12px;font-size:11px;background:var(--accent-soft);color:var(--accent);border-radius:8px;padding:3px 7px}
-  .game.feat .here{top:-9px;right:14px}
+  .tag{position:absolute;top:50%;right:14px;transform:translateY(-50%);font-size:11px;background:#efe5d8;color:var(--muted);border-radius:8px;padding:3px 7px}
+  .here{position:absolute;top:-9px;right:14px;font-size:11px;background:var(--accent-soft);color:var(--accent);border-radius:8px;padding:3px 7px}
   .board{width:52px;height:52px;flex:none;border-radius:10px;background:linear-gradient(135deg,#ecc893,#d8a764);position:relative;box-shadow:0 4px 12px rgba(90,55,20,.2)}
   .board::before{content:"";position:absolute;inset:8px;background:linear-gradient(rgba(70,40,10,.6) 1px,transparent 1px) 0 0/9px 9px,linear-gradient(90deg,rgba(70,40,10,.6) 1px,transparent 1px) 0 0/9px 9px}
   .board i{position:absolute;width:10px;height:10px;border-radius:50%}
@@ -86,17 +88,17 @@
       <div><div class="nm">五子棋</div><div class="ds">联机对弈 · 悔棋 · 互发表情</div></div>
       <span class="go">开始</span>
     </a>
-    <a class="game" data-g="rps" href="rps/"><div class="ic">✊✌️✋</div><div class="nm">石头剪刀布</div><div class="ds">谁输谁洗碗 · 同时亮手不偷看</div></a>
-    <a class="game" data-g="battleship" href="battleship/"><div class="ic">⚓️</div><div class="nm">海战棋</div><div class="ds">经典版 · 偷偷摆船，轮流开炮</div></a>
-    <a class="game" data-g="bomb" href="bomb/"><div class="ic">💣</div><div class="nm">数字炸弹</div><div class="ds">轮流猜数，范围越来越小 · 猜中就炸</div></a>
-    <a class="game" data-g="jenga" href="jenga/"><div class="ic">🧱</div><div class="nm">抽积木</div><div class="ds">按住慢慢抽，塔会晃 · 谁弄倒谁输</div></a>
-    <a class="game" data-g="roulette" href="roulette/"><div class="ic">🔫</div><div class="nm">俄罗斯轮盘</div><div class="ds">朝自己还是朝 TA？赌一把运气</div></a>
-    <a class="game" data-g="blackjack" href="blackjack/"><div class="ic">🂡</div><div class="nm">21 点</div><div class="ds">要牌还是停牌？谁更接近 21 谁赢</div></a>
-    <a class="game" data-g="typing" href="typing/"><div class="ic">⌨️</div><div class="nm">打字比赛</div><div class="ds">同一段话一起打 · 实时看到对方进度</div></a>
-    <a class="game" data-g="connect4" href="connect4/"><div class="ic">🔴🟡</div><div class="nm">四子棋</div><div class="ds">轮流落子连成四颗 · 也能和电脑玩</div></a>
-    <a class="game" data-g="tacit" href="tacit/"><div class="ic">💞</div><div class="nm">默契大考验</div><div class="ds">偷偷选，同时揭晓 · 也来猜猜 TA</div></a>
-    <a class="game" data-g="tictactoe" href="tictactoe/"><div class="ic">⭕❌</div><div class="nm">井字棋（OX）</div><div class="ds">九个格子连成三个 · 联机或和电脑玩</div></a>
-    <div class="game soon"><span class="tag">即将上线</span><div class="ic">🎨</div><div class="nm">你画我猜</div><div class="ds">一个画一个猜</div></div>
+    <a class="game" data-g="rps" href="rps/"><div class="ic">✊</div><div><div class="nm">石头剪刀布</div><div class="ds">谁输谁洗碗 · 同时亮手不偷看</div></div></a>
+    <a class="game" data-g="battleship" href="battleship/"><div class="ic">⚓️</div><div><div class="nm">海战棋</div><div class="ds">经典版 · 偷偷摆船，轮流开炮</div></div></a>
+    <a class="game" data-g="bomb" href="bomb/"><div class="ic">💣</div><div><div class="nm">数字炸弹</div><div class="ds">轮流猜数，范围越来越小 · 猜中就炸</div></div></a>
+    <a class="game" data-g="jenga" href="jenga/"><div class="ic">🧱</div><div><div class="nm">抽积木</div><div class="ds">按住慢慢抽，塔会晃 · 谁弄倒谁输</div></div></a>
+    <a class="game" data-g="roulette" href="roulette/"><div class="ic">🔫</div><div><div class="nm">俄罗斯轮盘</div><div class="ds">朝自己还是朝 TA？赌一把运气</div></div></a>
+    <a class="game" data-g="blackjack" href="blackjack/"><div class="ic">🂡</div><div><div class="nm">21 点</div><div class="ds">要牌还是停牌？谁更接近 21 谁赢</div></div></a>
+    <a class="game" data-g="typing" href="typing/"><div class="ic">⌨️</div><div><div class="nm">打字比赛</div><div class="ds">同一段话一起打 · 实时看到对方进度</div></div></a>
+    <a class="game" data-g="connect4" href="connect4/"><div class="ic ic2">🔴🟡</div><div><div class="nm">四子棋</div><div class="ds">轮流落子连成四颗 · 也能和电脑玩</div></div></a>
+    <a class="game" data-g="tacit" href="tacit/"><div class="ic">💞</div><div><div class="nm">默契大考验</div><div class="ds">偷偷选，同时揭晓 · 也来猜猜 TA</div></div></a>
+    <a class="game" data-g="tictactoe" href="tictactoe/"><div class="ic ic2">⭕❌</div><div><div class="nm">井字棋（OX）</div><div class="ds">九个格子连成三个 · 联机或和电脑玩</div></div></a>
+    <div class="game soon"><span class="tag">即将上线</span><div class="ic">🎨</div><div><div class="nm">你画我猜</div><div class="ds">一个画一个猜</div></div></div>
   </div>
 
   <p class="foot">无需注册 · 国内可直接打开<br>把房间号发给 TA，进同一个房间后选游戏，TA 会收到邀请</p>
