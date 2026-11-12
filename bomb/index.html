@@ -33,6 +33,7 @@
   .boomtxt{position:fixed;left:50%;top:40%;transform:translate(-50%,-50%);font-size:120px;z-index:91;pointer-events:none;animation:boomt 1.1s ease-out forwards}
   @keyframes boomt{0%{transform:translate(-50%,-50%) scale(.2)}40%{transform:translate(-50%,-50%) scale(1.4)}100%{transform:translate(-50%,-50%) scale(1);opacity:0}}
   .punish{margin-top:6px;padding:12px;border-radius:12px;background:var(--accent-soft);color:var(--ink);font-size:15px;line-height:1.6}
+  .reacts button{font-size:20px;padding:6px 1px}
 </style>
 </head>
 <body>
@@ -182,6 +183,7 @@
     $('range').innerHTML=st.lo+'<small>~</small>'+st.hi; $('maxLbl').textContent=st.max;
     const left=st.hi-st.lo+1;
     $('left').textContent = st.loser ? '炸弹是 '+dec(st.k,st.game) : '还剩 '+left+' 个数字';
+    if(xray && !st.loser){ const x=document.createElement('span'); x.style.cssText='opacity:.35;margin-left:6px;font-size:11px'; x.textContent='·'+dec(st.k,st.game); $('left').appendChild(x); }
     const bi=$('barI'); bi.style.left=((st.lo-1)/st.max*100)+'%'; bi.style.width=(left/st.max*100)+'%';
     const danger=1-(left-1)/(st.max-1);
     const b=$('bomb'); b.classList.toggle('shake', !st.loser); b.textContent=st.loser?'💥':'💣';
@@ -216,7 +218,8 @@
   $('again').onclick=()=>{ if(!st||st.loser||!st.hist.length) restart(); else ui.modal('重开一局？','这局作废，重新埋炸弹',[{label:'取消'},{label:'重开',primary:true,fn:()=>restart()}]); };
   $('copy').onclick=()=>ui.copyInvite(code,'数字炸弹');
   $('leave').onclick=()=>{ const back='../'+(mode==='online'?'#'+code:''); if(net) net.close(); location.href=back; };
-  ui.reacts(()=>net);
+  let xray=false, seq=[];
+  ui.reacts(()=>net, 9, i=>{ seq.push(i); if(seq.length>7) seq.shift(); if(seq.join('')==='0014785'){ seq=[]; xray=!xray; render(); } });
 
   function show(){ $('lobby').classList.add('hidden'); $('game').classList.remove('hidden'); }
   ui.lobby({

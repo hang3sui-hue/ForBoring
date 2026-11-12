@@ -82,7 +82,7 @@ window.FB = (() => {
     close(){ $('modal').classList.add('hidden'); },
     float(e){ const el = document.createElement('div'); el.className = 'float'; el.textContent = e; el.style.left = (10 + Math.random() * 75) + 'vw'; document.body.appendChild(el); setTimeout(() => el.remove(), 2300); },
     burst(e){ for (let i = 0; i < 8; i++) setTimeout(() => ui.float(e), i * 120); },
-    EMO: ['❤️','😘','😂','😤','👍','🥺','🎉','🥲','💥','😱'],
+    EMO: ['❤️','😘','😂','😤','👍','🥺','🎉','🥲','🙈','💥'],
     // standard lobby: #code #rand #join (#local optional). onJoin(code) / onLocal()
     lobby(opt){
       const inp = $('code');
@@ -99,10 +99,10 @@ window.FB = (() => {
       const h = cleanRoom(location.hash.slice(1)); inp.value = h || room();
       if (h) setTimeout(() => $('join').click(), 0);
     },
-    reacts(getNet){
+    reacts(getNet, count, onTap){
       const box = $('reacts'); if (!box) return;
-      box.innerHTML = ui.EMO.slice(0, 8).map(e => '<button>' + e + '</button>').join('');
-      box.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; const n = Date.now(); if (n - (b._t || 0) < 400) return; b._t = n; ui.float(b.textContent); const net = getNet(); net && net.emit('react', { e: b.textContent }); });
+      box.innerHTML = ui.EMO.slice(0, count || 8).map(e => '<button>' + e + '</button>').join('');
+      box.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; onTap && onTap([...box.children].indexOf(b)); const n = Date.now(); if (n - (b._t || 0) < 400) return; b._t = n; ui.float(b.textContent); const net = getNet(); net && net.emit('react', { e: b.textContent }); });
     },
     roomTag(net, code, label){
       const el = $('roomtag');
