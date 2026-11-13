@@ -56,6 +56,26 @@
   .modal p{color:var(--muted);margin:0 0 16px;font-size:14px}
   .modal .row button{flex:1;padding:12px}
   .hidden{display:none!important}
+  .lobby-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .online{font-size:12px;color:var(--muted)}
+  .online i{width:7px;height:7px;border-radius:50%;background:#4caf7a;display:inline-block;margin-right:5px;vertical-align:middle}
+  .switch{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);margin-top:12px;cursor:pointer;user-select:none}
+  .switch input{display:none}
+  .switch b{width:36px;height:20px;border-radius:20px;background:#e2d6c8;position:relative;flex:none;transition:background .2s}
+  .switch b::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .2s}
+  .switch input:checked+b{background:var(--accent)}
+  .switch input:checked+b::after{left:18px}
+  .rooms{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+  .rm{display:flex;align-items:center;gap:10px;background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:10px 12px}
+  .rm .rt{flex:1;min-width:0}
+  .rm .rn{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rm .rd{font-size:12px;color:var(--muted)}
+  .rm .cnt{font-size:12px;color:var(--muted);flex:none}
+  .rm button{padding:7px 12px;font-size:13px;flex:none}
+  .rm.full{opacity:.55}
+  .empty{font-size:13px;color:var(--muted);text-align:center;padding:10px 0 2px}
+  #match.seeking{background:var(--ink)}
+  .backhome{font-size:12px;color:var(--accent);background:none;padding:0;margin-top:10px}
 </style>
 </head>
 <body>
@@ -79,6 +99,16 @@
       <button id="copy" class="primary">邀请</button>
     </div>
     <div class="who" id="who"></div>
+    <button id="backHome" class="backhome hidden"></button>
+  </div>
+
+  <div class="card">
+    <div class="lobby-top">
+      <div><div style="font-weight:700">公开大厅</div><div class="online"><i></i><span id="online">在线 1 人</span></div></div>
+      <button id="match" class="primary">随机匹配</button>
+    </div>
+    <label class="switch"><input type="checkbox" id="pub"><b></b><span id="pubTxt">把我的房间公开到大厅，陌生人也能进来</span></label>
+    <div class="rooms" id="rooms"></div>
   </div>
 
   <div class="sec">选个游戏</div>
@@ -102,21 +132,23 @@
     <div class="game soon"><span class="tag">即将上线</span><div class="ic">🎨</div><div><div class="nm">你画我猜</div><div class="ds">一个画一个猜</div></div></div>
   </div>
 
-  <p class="foot">无需注册 · 国内可直接打开<br>把房间号发给 TA，进同一个房间后选游戏，TA 会收到邀请</p>
+  <p class="foot">无需注册 · 国内可直接打开<br>和朋友玩：把房间号发给 TA · 和陌生人玩：点「随机匹配」或进大厅里的房间<br>房间默认不公开，只有打开开关才会出现在大厅</p>
 </div>
 
 <div id="modal" class="modal hidden"><div class="card"><h3 id="mT"></h3><p id="mP"></p><div class="row" id="mBtns"></div></div></div>
 <div id="toast" class="toast"></div>
 
-<script src="common.js?v=1794503478"></script>
+<script src="common.js?v=1794600000"></script>
 <script src="mqtt.min.js"></script>
 <script>
 (() => {
   const BROKER='wss://broker-cn.emqx.io:8084/mqtt', ALIVE_MS=45000;
-  const GAMES={ gomoku:'五子棋', rps:'石头剪刀布', battleship:'海战棋', bomb:'数字炸弹', jenga:'抽积木', roulette:'俄罗斯轮盘', blackjack:'21 点', typing:'打字比赛', connect4:'四子棋', tacit:'默契大考验', tictactoe:'井字棋', quoridor:'步步为营', hub:'主页' };
+  const GAMES={}; Object.keys(FB.GAMES).forEach(k=>GAMES[k]=FB.GAMES[k].n); GAMES.hub='主页';
+  const cap=g=>(FB.GAMES[g]||FB.GAMES.hub).cap;
   const $=id=>document.getElementById(id);
   const myId=FB.id();
   let client=null, base='', conn=false, peers=new Map(), hb=null, tick=null, code='', wasPresent=new Set();
+  let lobby=new Map(), seeking=false, seekTimer=null;
 
   function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('on'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('on'),1800); }
   function modal(title,text,btns){ $('mT').textContent=title; $('mP').textContent=text; const b=$('mBtns'); b.innerHTML=''; btns.forEach(x=>{ const e=document.createElement('button'); e.textContent=x.label; if(x.primary) e.className='primary'; e.onclick=()=>{ $('modal').classList.add('hidden'); x.fn&&x.fn(); }; b.appendChild(e); }); $('modal').classList.remove('hidden'); }
@@ -133,12 +165,18 @@
     r=FB.setRoom(r); $('room').value=r;
     try{ history.replaceState(null,'','#'+r); }catch(_){}
     document.querySelectorAll('a.game[data-g]').forEach(a=>a.href=a.dataset.g+'/#'+r);
-    if(r!==code) connect(r);
+    $('pub').checked=FB.isPublic(r);
+    const home=FB.homeRoom(); $('backHome').classList.toggle('hidden', r===home); $('backHome').textContent='← 回到我自己的房间 '+home;
+    if(r!==code) connect(r); else beat();
+    renderLobby();
   }
+  $('backHome').onclick=()=>{ stopSeek(); useRoom(FB.homeRoom()); };
+  $('pub').onchange=()=>{ FB.setPublic(code,$('pub').checked); beat(); toast($('pub').checked?'房间已公开到大厅':'房间已从大厅隐藏'); renderLobby(); };
   $('room').addEventListener('input',e=>{ const c=FB.cleanRoom(e.target.value); if(c!==e.target.value) e.target.value=c; });
-  $('room').addEventListener('change',()=>{ if(FB.cleanRoom($('room').value)) useRoom($('room').value); else $('room').value=code; });
+  function setHome(r){ document.cookie='fb_home='+encodeURIComponent(r)+'; path=/; max-age=31536000; SameSite=Lax'; try{ localStorage.setItem('fb_home',r); }catch(_){} }
+  $('room').addEventListener('change',()=>{ const r=FB.cleanRoom($('room').value); if(r){ stopSeek(); setHome(r); useRoom(r); } else $('room').value=code; });
   $('room').addEventListener('keydown',e=>{ if(e.key==='Enter') $('room').blur(); });
-  $('roomRnd').onclick=()=>{ useRoom(FB.randomRoom()); toast('换了个新房间'); };
+  $('roomRnd').onclick=()=>{ stopSeek(); const r=FB.randomRoom(); setHome(r); useRoom(r); toast('换了个新房间'); };
   $('copy').onclick=()=>{
     const link=location.origin+location.pathname+'#'+code;
     const txt=FB.name()+' 喊你来玩！打开 '+link+' ，房间号：'+code;
@@ -146,7 +184,7 @@
   };
 
   // ---- presence ----
-  function beat(){ if(client&&conn) FB.hubBeat(client, code, myId, 'hub'); }
+  function beat(){ if(client&&conn) FB.hubBeat(client, code, myId, 'hub', seeking?{seek:1}:null); }
   function connect(r){
     if(client){ try{ if(conn) client.publish(base+'/p/'+myId,'',{qos:1,retain:true}); client.end(true); }catch(_){} }
     clearInterval(hb); clearInterval(tick);
@@ -155,9 +193,10 @@
     const c=mqtt.connect(BROKER,{ clientId:'hub_'+myId+'_'+Math.random().toString(36).slice(2,6), clean:true, keepalive:30, reconnectPeriod:2000, connectTimeout:10000,
       will:{ topic:base+'/p/'+myId, payload:'', qos:1, retain:true } });
     client=c;
-    c.on('connect',()=>{ if(client!==c) return; conn=true; c.subscribe(base+'/#',{qos:1}); beat(); render(); });
+    c.on('connect',()=>{ if(client!==c) return; conn=true; c.subscribe(base+'/#',{qos:1}); c.subscribe(FB.LOBBY+'+',{qos:0}); beat(); render(); });
     c.on('message',(topic,payload)=>{
       if(client!==c) return;
+      if(topic.startsWith(FB.LOBBY)){ onLobby(topic.slice(FB.LOBBY.length), payload.toString()); return; }
       const sub=topic.slice(base.length+1), txt=payload.toString();
       let d=null; if(txt){ try{ d=JSON.parse(txt); }catch(_){ return; } }
       if(sub.startsWith('p/')){
@@ -173,12 +212,65 @@
     c.on('close',()=>{ if(client===c){ conn=false; render(); } });
     c.on('offline',()=>{ if(client===c){ conn=false; render(); } });
     c.on('error',()=>{});
-    hb=setInterval(beat,15000); tick=setInterval(checkPeers,5000);
+    hb=setInterval(beat,15000); tick=setInterval(()=>{ checkPeers(); renderLobby(); },5000);
   }
+
+  // ---- public lobby ----
+  function onLobby(id,txt){
+    if(!/^[a-z0-9]{1,16}$/.test(id)) return;
+    if(!txt){ lobby.delete(id); renderLobby(); return; }
+    let d; try{ d=JSON.parse(txt); }catch(_){ return; }
+    if(!d||typeof d.t!=='number') return;
+    lobby.set(id,{ t:d.t, n:FB.cleanName(d.n)||'某人', r:FB.cleanRoom(d.r), at:(d.at in GAMES)?d.at:'hub', pub:!!d.pub, seek:!!d.seek });
+    renderLobby();
+  }
+  function lobbyAlive(){ const now=Date.now(), r=[]; lobby.forEach((p,id)=>{ if(now-p.t<ALIVE_MS && p.r) r.push(Object.assign({id},p)); }); return r; }
+  function publicRooms(){
+    const m=new Map();
+    lobbyAlive().forEach(p=>{ if(!m.has(p.r)) m.set(p.r,{ r:p.r, people:[], pub:false, seek:false }); const x=m.get(p.r); x.people.push(p); if(p.pub) x.pub=true; if(p.seek) x.seek=true; });
+    return [...m.values()].filter(x=>x.pub).map(x=>{
+      const g=x.people.find(p=>p.at!=='hub'); x.at=g?g.at:'hub'; x.cap=cap(x.at); x.full=x.people.length>=x.cap;
+      x.since=Math.min(...x.people.map(p=>p.t)); return x;
+    }).sort((a,b)=>(a.full-b.full)||(a.since-b.since));
+  }
+  function renderLobby(){
+    const all=lobbyAlive(), ids=new Set(all.map(p=>p.id)); ids.add(myId);
+    $('online').textContent='在线 '+ids.size+' 人';
+    const box=$('rooms'); box.innerHTML='';
+    const list=publicRooms().filter(x=>x.r!==code).slice(0,20);
+    if(!list.length){ const e=document.createElement('div'); e.className='empty'; e.textContent=seeking?'正在找人…有人进来就会自动配对':'大厅里还没有公开的房间，点「随机匹配」等人来'; box.appendChild(e); }
+    list.forEach(x=>{
+      const row=document.createElement('div'); row.className='rm'+(x.full?' full':'');
+      const t=document.createElement('div'); t.className='rt';
+      const n=document.createElement('div'); n.className='rn'; n.textContent=x.people[0].n+(x.people.length>1?' 等':'')+' 的房间';
+      const d=document.createElement('div'); d.className='rd'; d.textContent=x.at==='hub'?'在大厅等人':'在玩'+GAMES[x.at];
+      t.appendChild(n); t.appendChild(d); row.appendChild(t);
+      const c=document.createElement('span'); c.className='cnt'; c.textContent=x.people.length+'/'+x.cap; row.appendChild(c);
+      const b=document.createElement('button'); b.textContent=x.full?'已满':'加入'; b.disabled=x.full; if(!x.full) b.className='primary';
+      b.onclick=()=>joinPublic(x.r); row.appendChild(b);
+      box.appendChild(row);
+    });
+  }
+  function joinPublic(r){ stopSeek(); FB.setPublic(r,true); useRoom(r); toast('进入房间 '+r); }
+
+  // random match: join someone already waiting; otherwise open a public room and wait.
+  // Two people searching at once: the one with the larger room code moves to the smaller one.
+  function seekStep(){
+    if(!seeking) return;
+    if(alive().length){ const p=alive()[0]; stopSeek(); toast('匹配到 '+p.n+'，选个游戏吧 🎉'); return; }
+    const mineWaiting=FB.isPublic(code) && code!==FB.homeRoom();
+    const cands=publicRooms().filter(x=>x.r!==code && !x.full && x.at==='hub' && x.people.length===1 && (!x.seek || !mineWaiting || x.r<code));
+    if(cands.length){ const x=cands[0]; FB.setPublic(x.r,true); useRoom(x.r); return; }
+    if(!mineWaiting){ const r=FB.randomRoom(); FB.setPublic(r,true); useRoom(r); }
+  }
+  function startSeek(){ if(!conn){ toast('还在连接，稍等一下'); return; } seeking=true; $('match').textContent='取消匹配'; $('match').classList.add('seeking'); seekStep(); beat(); seekTimer=setInterval(seekStep,2500); renderLobby(); }
+  function stopSeek(){ if(!seeking) return; seeking=false; clearInterval(seekTimer); $('match').textContent='随机匹配'; $('match').classList.remove('seeking'); beat(); renderLobby(); }
+  $('match').onclick=()=>seeking?stopSeek():startSeek();
   function alive(){ const now=Date.now(), r=[]; peers.forEach((p,id)=>{ if(now-p.t<ALIVE_MS) r.push(Object.assign({id},p)); }); return r; }
   function checkPeers(){
     const cur=alive(), ids=new Set(cur.map(p=>p.id));
     cur.forEach(p=>{ if(!wasPresent.has(p.id)) toast(p.n+' 在房间里 💕'); });
+    if(seeking && cur.length) seekStep();
     wasPresent=ids; render();
   }
   function render(){
@@ -201,8 +293,9 @@
       setTimeout(()=>{ location.href=a.href; }, 250);
     }
   }));
-  window.addEventListener('pagehide',()=>{ if(client&&conn){ try{ client.publish(base+'/p/'+myId,'',{qos:1,retain:true}); }catch(_){} } });
+  window.addEventListener('pagehide',()=>{ if(client&&conn){ try{ client.publish(base+'/p/'+myId,'',{qos:1,retain:true}); FB.lobbyClear(client,myId); }catch(_){} } });
 
+  FB.homeRoom();
   useRoom(FB.cleanRoom(location.hash.slice(1)) || FB.room());
 })();
 </script>

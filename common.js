@@ -21,10 +21,34 @@ window.FB = (() => {
 
   function id(){ let v; try { v = localStorage.getItem('wzq-id'); } catch(_) {} if (!v) { v = Math.random().toString(36).slice(2, 12); try { localStorage.setItem('wzq-id', v); } catch(_) {} } return v; }
 
-  // let the home page know where you are
-  function hubBeat(client, code, myId, at){
-    try { client.publish('hub-duo-v1/' + code + '/p/' + myId, JSON.stringify({ t: Date.now(), n: name(), at }), { qos: 1, retain: true }); } catch(_) {}
+  // ---- game registry: cap = max players per room (all 2 for now; raise it when a game supports more) ----
+  const GAMES = {
+    hub: { n: '大厅', cap: 2 }, gomoku: { n: '五子棋', cap: 2 }, rps: { n: '石头剪刀布', cap: 2 }, battleship: { n: '海战棋', cap: 2 },
+    bomb: { n: '数字炸弹', cap: 2 }, jenga: { n: '抽积木', cap: 2 }, roulette: { n: '俄罗斯轮盘', cap: 2 }, blackjack: { n: '21 点', cap: 2 },
+    typing: { n: '打字比赛', cap: 2 }, connect4: { n: '四子棋', cap: 2 }, tacit: { n: '默契大考验', cap: 2 }, tictactoe: { n: '井字棋', cap: 2 },
+    quoridor: { n: '步步为营', cap: 2 }
+  };
+
+  // ---- public lobby: a room is private unless you choose to show it in the lobby ----
+  const LOBBY = 'fb-lobby-v1/u/';
+  function pubList(){ try { return JSON.parse(localStorage.getItem('fb_pub') || '[]'); } catch(_) { return []; } }
+  function isPublic(code){ return pubList().includes(code); }
+  function setPublic(code, on){
+    let l = pubList().filter(c => c !== code); if (on) l.unshift(code);
+    try { localStorage.setItem('fb_pub', JSON.stringify(l.slice(0, 20))); } catch(_) {}
   }
+  // your own room (for playing with friends) is kept separately from rooms you join from the lobby
+  function homeRoom(){ let r = cleanRoom(read('fb_home')); if (!r) { r = room(); store('fb_home', r); } return r; }
+
+  // let the home page and the lobby know where you are
+  function hubBeat(client, code, myId, at, extra){
+    try {
+      const now = Date.now();
+      client.publish('hub-duo-v1/' + code + '/p/' + myId, JSON.stringify({ t: now, n: name(), at }), { qos: 1, retain: true });
+      client.publish(LOBBY + myId, JSON.stringify(Object.assign({ t: now, n: name(), r: code, at, pub: isPublic(code) }, extra || {})), { qos: 0, retain: true });
+    } catch(_) {}
+  }
+  function lobbyClear(client, myId){ try { client.publish(LOBBY + myId, '', { qos: 0, retain: true }); } catch(_) {} }
   // Generic room connection for newer games: presence with names, one retained state doc, live events
   function net(game, code, h){
     const BROKER = 'wss://broker-cn.emqx.io:8084/mqtt', ALIVE = 45000;
@@ -48,7 +72,7 @@ window.FB = (() => {
     self.emit = (t, data) => { if (conn) client.publish(base + '/e', JSON.stringify(Object.assign({ t, from: myId }, data || {})), { qos: 0 }); };
     self.close = () => {
       clearInterval(hb); clearInterval(tick);
-      try { if (conn) { client.publish(base + '/p/' + myId, '', { qos: 1, retain: true }); client.publish('hub-duo-v1/' + code + '/p/' + myId, '', { qos: 1, retain: true }); } client.end(false); } catch(_) {}
+      try { if (conn) { client.publish(base + '/p/' + myId, '', { qos: 1, retain: true }); client.publish('hub-duo-v1/' + code + '/p/' + myId, '', { qos: 1, retain: true }); lobbyClear(client, myId); } client.end(false); } catch(_) {}
       conn = false;
     };
     client.on('connect', () => { conn = true; client.subscribe(base + '/#', { qos: 1 }); beat(); h.onConn && h.onConn(true); });
@@ -116,5 +140,5 @@ window.FB = (() => {
     }
   };
 
-  return { name, setName, cleanName, room, setRoom, randomRoom, cleanRoom, id, hubBeat, net, ui };
+  return { name, setName, cleanName, room, setRoom, randomRoom, cleanRoom, id, hubBeat, net, ui, GAMES, LOBBY, isPublic, setPublic, homeRoom, lobbyClear };
 })();
