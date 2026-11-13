@@ -26,7 +26,8 @@
   .who span.me{background:var(--accent-soft)}
   .who i{width:7px;height:7px;border-radius:50%;background:#4caf7a;display:inline-block}
   .who em{font-style:normal;color:var(--muted);font-size:12px}
-  .sec{font-size:15px;font-weight:700;margin:22px 0 10px}
+  .sec{font-size:15px;font-weight:700;margin:26px 0 10px;display:flex;align-items:baseline;gap:8px}
+  .secsub{font-size:12px;font-weight:400;color:var(--muted)}
   .grid{display:flex;flex-direction:column;gap:10px}
   .game{position:relative;display:flex;flex-direction:row;align-items:center;gap:14px;text-decoration:none;color:inherit;background:var(--card);border:1.5px solid var(--line);border-radius:18px;padding:14px 16px;transition:transform .12s,box-shadow .2s,border-color .2s;cursor:pointer}
   .game>div:not(.ic):not(.board){flex:1;min-width:0}
@@ -111,27 +112,49 @@
     <div class="rooms" id="rooms"></div>
   </div>
 
-  <div class="sec">选个游戏</div>
+  <div class="sec">🧠 动脑的<span class="secsub">拼脑子，不拼运气</span></div>
   <div class="grid">
     <a class="game feat" data-g="gomoku" href="gomoku/">
       <div class="board"><i class="b" style="left:11px;top:11px"></i><i class="w" style="left:20px;top:20px"></i><i class="b" style="left:29px;top:20px"></i><i class="w" style="left:20px;top:29px"></i><i class="b" style="left:29px;top:29px"></i></div>
       <div><div class="nm">五子棋</div><div class="ds">联机对弈 · 悔棋 · 互发表情</div></div>
       <span class="go">开始</span>
     </a>
-    <a class="game" data-g="rps" href="rps/"><div class="ic">✊</div><div><div class="nm">石头剪刀布</div><div class="ds">谁输谁洗碗 · 同时亮手不偷看</div></div></a>
-    <a class="game" data-g="battleship" href="battleship/"><div class="ic">⚓️</div><div><div class="nm">海战棋</div><div class="ds">经典版 · 偷偷摆船，轮流开炮</div></div></a>
-    <a class="game" data-g="bomb" href="bomb/"><div class="ic">💣</div><div><div class="nm">数字炸弹</div><div class="ds">轮流猜数，范围越来越小 · 猜中就炸</div></div></a>
-    <a class="game" data-g="jenga" href="jenga/"><div class="ic">🧱</div><div><div class="nm">抽积木</div><div class="ds">按住慢慢抽，塔会晃 · 谁弄倒谁输</div></div></a>
-    <a class="game" data-g="roulette" href="roulette/"><div class="ic">🔫</div><div><div class="nm">俄罗斯轮盘</div><div class="ds">朝自己还是朝 TA？赌一把运气</div></div></a>
-    <a class="game" data-g="blackjack" href="blackjack/"><div class="ic">🂡</div><div><div class="nm">21 点</div><div class="ds">要牌还是停牌？谁更接近 21 谁赢</div></div></a>
-    <a class="game" data-g="typing" href="typing/"><div class="ic">⌨️</div><div><div class="nm">打字比赛</div><div class="ds">同一段话一起打 · 实时看到对方进度</div></div></a>
     <a class="game" data-g="connect4" href="connect4/"><div class="ic ic2">🔴🟡</div><div><div class="nm">四子棋</div><div class="ds">轮流落子连成四颗 · 也能和电脑玩</div></div></a>
-    <a class="game" data-g="tacit" href="tacit/"><div class="ic">💞</div><div><div class="nm">默契大考验</div><div class="ds">偷偷选，同时揭晓 · 也来猜猜 TA</div></div></a>
-    <a class="game" data-g="tictactoe" href="tictactoe/"><div class="ic ic2">⭕❌</div><div><div class="nm">井字棋（OX）</div><div class="ds">九个格子连成三个 · 联机或和电脑玩</div></div></a>
-    <a class="game" data-g="quoridor" href="quoridor/"><div class="ic">🚧</div><div><div class="nm">步步为营</div><div class="ds">走一步，还是放堵墙挡 TA？先到对面赢</div></div></a>
+    <a class="game" data-g="tictactoe" href="tictactoe/"><div class="ic ic2">⭕❌</div><div><div class="nm">井字棋</div><div class="ds">九个格子连成三个 · 联机或和电脑玩</div></div></a>
+    <a class="game" data-g="uttt" href="uttt/"><div class="ic">#️⃣</div><div><div class="nm">终极井字棋</div><div class="ds">九个井字棋套成一个 · 你下哪格，TA 就得去哪盘</div></div></a>
     <a class="game" data-g="reversi" href="reversi/"><div class="ic ic2">⚫⚪</div><div><div class="nm">黑白棋</div><div class="ds">夹住就翻面 · 也能和电脑玩</div></div></a>
     <a class="game" data-g="dots" href="dots/"><div class="ic">✏️</div><div><div class="nm">点格棋</div><div class="ds">连线围格子 · 围到就再画一笔</div></div></a>
+    <a class="game" data-g="quoridor" href="quoridor/"><div class="ic">🚧</div><div><div class="nm">步步为营</div><div class="ds">走一步，还是放堵墙挡 TA？先到对面赢</div></div></a>
+    <a class="game" data-g="jungle" href="jungle/"><div class="ic">🐘</div><div><div class="nm">斗兽棋</div><div class="ds">象吃狮、狮吃虎、鼠吃象 · 钻进兽穴就赢</div></div></a>
+    <a class="game" data-g="checkers" href="checkers/"><div class="ic">🔷</div><div><div class="nm">中国跳棋</div><div class="ds">隔子连跳 · 先把棋子全挪到对面的赢</div></div></a>
     <a class="game" data-g="memory" href="memory/"><div class="ic">🃏</div><div><div class="nm">翻牌配对</div><div class="ds">翻两张一样就收走 · 比谁记性好</div></div></a>
+  </div>
+
+  <div class="sec">🎲 运气和心理战<span class="secsub">猜、赌、虚张声势</span></div>
+  <div class="grid">
+    <a class="game" data-g="rps" href="rps/"><div class="ic">✊</div><div><div class="nm">石头剪刀布</div><div class="ds">谁输谁洗碗 · 同时亮手不偷看</div></div></a>
+    <a class="game" data-g="bomb" href="bomb/"><div class="ic">💣</div><div><div class="nm">数字炸弹</div><div class="ds">轮流猜数，范围越来越小 · 猜中就炸</div></div></a>
+    <a class="game" data-g="roulette" href="roulette/"><div class="ic">🔫</div><div><div class="nm">俄罗斯轮盘</div><div class="ds">朝自己还是朝 TA？赌一把运气</div></div></a>
+    <a class="game" data-g="blackjack" href="blackjack/"><div class="ic">🂡</div><div><div class="nm">21 点</div><div class="ds">要牌还是停牌？谁更接近 21 谁赢</div></div></a>
+    <a class="game" data-g="battleship" href="battleship/"><div class="ic">⚓️</div><div><div class="nm">海战棋</div><div class="ds">经典版 · 偷偷摆船，轮流开炮</div></div></a>
+  </div>
+
+  <div class="sec">⚡ 拼手速的<span class="secsub">手快有，手慢无</span></div>
+  <div class="grid">
+    <a class="game" data-g="typing" href="typing/"><div class="ic">⌨️</div><div><div class="nm">打字比赛</div><div class="ds">同一段话一起打 · 实时看到对方进度</div></div></a>
+    <a class="game" data-g="jenga" href="jenga/"><div class="ic">🧱</div><div><div class="nm">抽积木</div><div class="ds">按住慢慢抽，塔会晃 · 谁弄倒谁输</div></div></a>
+    <a class="game" data-g="g2048" href="g2048/"><div class="ic">🔢</div><div><div class="nm">2048</div><div class="ds">同一个开局同时玩 · 3 分钟比分数</div></div></a>
+    <a class="game" data-g="reaction" href="reaction/"><div class="ic">🚦</div><div><div class="nm">反应力测试</div><div class="ds">变绿的一瞬间谁先按 · 抢跑直接输</div></div></a>
+    <a class="game" data-g="tron" href="tron/"><div class="ic">🏍️</div><div><div class="nm">光速摩托</div><div class="ds">边跑边留墙 · 谁先撞上谁输</div></div></a>
+    <a class="game" data-g="tug" href="tug/"><div class="ic">🪢</div><div><div class="nm">拔河</div><div class="ds">两个人一起狂点 · 把绳子拉过来就赢</div></div></a>
+    <a class="game" data-g="mole" href="mole/"><div class="ic">🔨</div><div><div class="nm">打地鼠</div><div class="ds">同一批地鼠一起冒 · 30 秒比谁打得多</div></div></a>
+  </div>
+
+  <div class="sec">💕 情侣向<span class="secsub">玩着玩着就聊起来了</span></div>
+  <div class="grid">
+    <a class="game" data-g="tacit" href="tacit/"><div class="ic">💞</div><div><div class="nm">默契大考验</div><div class="ds">偷偷选，同时揭晓 · 也来猜猜 TA</div></div></a>
+    <a class="game" data-g="truth" href="truth/"><div class="ic">💬</div><div><div class="nm">真心话大冒险</div><div class="ds">转到谁谁回答 · 轻松、心动、刺激三档</div></div></a>
+    <a class="game" data-g="wheel" href="wheel/"><div class="ic">🎡</div><div><div class="nm">幸运转盘</div><div class="ds">今天谁洗碗、吃什么 · 一起看着转</div></div></a>
     <div class="game soon"><span class="tag">即将上线</span><div class="ic">🎨</div><div><div class="nm">你画我猜</div><div class="ds">一个画一个猜</div></div></div>
   </div>
 
@@ -141,7 +164,7 @@
 <div id="modal" class="modal hidden"><div class="card"><h3 id="mT"></h3><p id="mP"></p><div class="row" id="mBtns"></div></div></div>
 <div id="toast" class="toast"></div>
 
-<script src="common.js?v=1794610000"></script>
+<script src="common.js?v=1794620000"></script>
 <script src="mqtt.min.js"></script>
 <script>
 (() => {

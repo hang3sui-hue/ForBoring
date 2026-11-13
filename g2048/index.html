@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>2048 · ForBoring</title>
+<link rel="stylesheet" href="../common.css?v=1794620000">
+<style>
+  .stage{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:16px 12px;text-align:center}
+  .eyebrow{font-size:12px;color:var(--muted);letter-spacing:1px}.status{line-height:1.6;min-height:26px;margin:8px 0 14px}
+  .seats{display:flex;gap:10px;margin:12px 0}.seat{flex:1;min-width:0;padding:10px 8px;border:1.5px solid var(--line);border-radius:14px;background:var(--card);font-size:13px;text-align:center;overflow-wrap:anywhere}.seat.active{background:var(--accent-soft);border-color:var(--accent)}.seat b{display:block;font-size:18px;margin-top:2px}
+  .reacts button{font-size:20px;padding:6px 1px}
+  .count{font-size:30px;font-weight:900;color:var(--accent);min-height:38px}
+  .b48{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;max-width:360px;margin:0 auto;background:#bbada0;padding:8px;border-radius:14px;touch-action:none;user-select:none;-webkit-user-select:none}
+  .t{aspect-ratio:1;border-radius:8px;background:#cdc1b4;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:clamp(18px,7vw,32px);color:#776e65}
+  .t.n2{background:#eee4da}.t.n4{background:#ede0c8}.t.n8{background:#f2b179;color:#fff}.t.n16{background:#f59563;color:#fff}.t.n32{background:#f67c5f;color:#fff}.t.n64{background:#f65e3b;color:#fff}
+  .t.n128{background:#edcf72;color:#fff;font-size:clamp(15px,6vw,26px)}.t.n256{background:#edcc61;color:#fff;font-size:clamp(15px,6vw,26px)}.t.n512{background:#edc850;color:#fff;font-size:clamp(15px,6vw,26px)}
+  .t.n1024,.t.n2048,.t.big{background:#edc22e;color:#fff;font-size:clamp(12px,4.6vw,20px)}
+  .t.pop{animation:pop .15s ease-out}@keyframes pop{from{transform:scale(.6)}to{transform:scale(1)}}
+  .arrows{display:grid;grid-template-columns:repeat(3,52px);gap:6px;justify-content:center;margin-top:12px}
+  .arrows button{padding:10px 0;font-size:18px}
+  .seat small{display:block;font-size:11px;color:var(--muted)}
+
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section id="lobby"><a class="back" href="../">‹ 返回主页</a><h1>2048</h1><p class="sub">两个人拿到一模一样的开局，同时开玩。<br>滑动合并数字，3 分钟后分数高的赢 🔢</p>
+    <div class="card"><label for="code">房间号（字母或数字）</label><div class="row"><input id="code" maxlength="12" placeholder="比如 love520" autocomplete="off" autocapitalize="off" spellcheck="false"><button id="rand" class="ghost" aria-label="随机房间号">🎲</button></div><button id="join" class="primary block">进入房间</button><div class="divider">或者</div><button id="local" class="ghost block" style="margin-top:6px">先和电脑玩</button><button id="pass" class="ghost block">同一台手机轮流玩</button></div>
+    <p class="hint">两个相同的数字撞在一起会合成一个，合出来的数就是你得的分。<br>电脑上可以用方向键或 WASD。</p>
+  </section>
+  <section id="game" class="hidden"><div class="topbar"><div id="roomtag" class="roomtag"></div><div class="row" style="gap:6px"><button id="copy" class="ghost small">复制邀请</button><button id="leave" class="ghost small">离开</button></div></div>
+    <div class="seats"><div id="seat0" class="seat"></div><div id="seat1" class="seat"></div></div>
+    <div class="stage"><div id="round" class="eyebrow"></div><div id="status" class="status" role="status" aria-live="polite"></div><div id="count" class="count"></div><div id="grid" class="b48"></div><div id="arrows" class="arrows"><span></span><button data-d="0" class="ghost">↑</button><span></span><button data-d="3" class="ghost">←</button><button data-d="2" class="ghost">↓</button><button data-d="1" class="ghost">→</button></div><div id="board"></div></div>
+    <p class="hint" id="caption">出现的新数字顺序两边是一样的，靠的是走法。</p><button id="again" class="ghost block">重开一局</button><div id="reacts" class="reacts"></div>
+  </section>
+</div>
+<div id="modal" class="modal hidden"><div class="card"><h3 id="mT"></h3><p id="mP"></p><div class="row" id="mBtns"></div></div></div><div id="toast" class="toast"></div>
+<script src="../common.js?v=1794620000"></script>
+<script src="../mqtt.min.js"></script>
+<script src="../rt.js?v=1794620000"></script>
+<script>
+(() => {
+'use strict';
+
+const $=id=>document.getElementById(id),ui=FB.ui,DUR=180000;
+let L=null,k=-1,me=null,bt=null,opp={s:0,mx:0},phase='idle',goAt=0,timer=null,sendT=null,botT=null,cdT=[],fin=[null,null],finT=null,dirty=false;
+const pair=()=>L.pair(),mi=()=>pair().indexOf(L.me());
+function rng(seed){let a=seed>>>0||1;return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function newBoard(seed){const B={g:Array(16).fill(0),s:0,r:rng(seed),dead:false,born:-1};spawn(B);spawn(B);return B;}
+function spawn(B){const e=[];B.g.forEach((v,i)=>{if(!v)e.push(i);});if(!e.length)return;const i=e[Math.floor(B.r()*e.length)];B.g[i]=B.r()<0.9?2:4;B.born=i;}
+function slide(g,dir){ // dir 0 up 1 right 2 down 3 left; returns [newGrid, gained, moved]
+  const n=g.slice();let gain=0,moved=false;
+  for(let a=0;a<4;a++){const idx=[];for(let b=0;b<4;b++){const r=dir===0?b:dir===2?3-b:a,c=dir===3?b:dir===1?3-b:a;idx.push(r*4+c);}
+    const v=idx.map(i=>n[i]).filter(x=>x),out=[];for(let i=0;i<v.length;i++){if(v[i]===v[i+1]){out.push(v[i]*2);gain+=v[i]*2;i++;}else out.push(v[i]);}
+    while(out.length<4)out.push(0);idx.forEach((i,j)=>{if(n[i]!==out[j])moved=true;n[i]=out[j];});}
+  return [n,gain,moved];
+}
+const canMove=g=>[0,1,2,3].some(d=>slide(g,d)[2]);
+function play(B,dir){if(B.dead)return false;const [n,gain,moved]=slide(B.g,dir);if(!moved)return false;B.g=n;B.s+=gain;spawn(B);if(!canMove(B.g))B.dead=true;return true;}
+const maxT=B=>Math.max(...B.g);
+function seats(){
+  for(let p=0;p<2;p++){const id=pair()[p],e=$('seat'+p),b=document.createElement('b'),sm=document.createElement('small');
+    const mine=p===mi(),S=mine?me:L.mode==='bot'&&p===1?bt:null,s=S?S.s:opp.s,mx=S?maxT(S):opp.mx;
+    b.textContent=(fin[p]!==null?fin[p]:s)+' 分';sm.textContent=mx?'最大 '+mx:'';e.replaceChildren(document.createTextNode(id?L.nameOf(id):'等 TA 来'),b,sm);}
+}
+function draw(){
+  const box=$('grid');box.replaceChildren();const g=me?me.g:Array(16).fill(0);
+  g.forEach((v,i)=>{const t=document.createElement('div');t.className='t'+(v?(v>2048?' big':' n'+v):'')+(me&&i===me.born&&dirty?' pop':'');t.textContent=v||'';box.appendChild(t);});dirty=false;seats();
+}
+function status(t){$('status').textContent=t;}
+function move(dir){if(phase!=='go'||!me)return;if(play(me,dir)){dirty=true;draw();if(me.dead){ui.toast('没地方可走了，等时间结束');finishMe();}}}
+function start(kk,seed){
+  clear();k=kk;me=newBoard(seed);bt=L.mode==='bot'?newBoard(seed):null;opp={s:0,mx:2};fin=[null,null];phase='count';draw();status('');let n=3;$('count').textContent=n;
+  for(let i=1;i<=3;i++)cdT.push(setTimeout(()=>{n--;$('count').textContent=n||'开始！';if(!n){phase='go';goAt=Date.now();status('滑动或用方向键，3 分钟内分数高的赢');run();}},i*800));
+}
+function run(){
+  timer=setInterval(()=>{const left=Math.max(0,DUR-(Date.now()-goAt));$('count').textContent=Math.floor(left/60000)+':'+String(Math.floor(left/1000)%60).padStart(2,'0');if(!left)timeUp();},250);
+  if(L.mode==='online')sendT=setInterval(()=>L.emit('s',{k,s:me.s,mx:maxT(me)}),500);
+  if(L.mode==='bot'){const step=()=>{if(phase!=='go'||bt.dead)return;let best=-1,bd=0;for(let d=0;d<4;d++){const [n,gain,mv]=slide(bt.g,d);if(!mv)continue;const sc=gain+n.filter(x=>!x).length*12+(d===2||d===3?6:0)+Math.random()*8;if(sc>best){best=sc;bd=d;}}play(bt,bd);seats();botT=setTimeout(step,260+Math.random()*260);};botT=setTimeout(step,500);}
+}
+function finishMe(){if(fin[mi()]!==null)return;fin[mi()]=me.s;if(L.mode==='online')L.emit('fin',{k,s:me.s});seats();result();}
+function timeUp(){if(phase!=='go')return;phase='done';clearInterval(timer);clearInterval(sendT);clearTimeout(botT);$('count').textContent='0:00';
+  status('时间到！等对方的成绩…');if(L.mode==='bot'){fin[1]=bt.s;}finishMe();if(L.mode==='online')finT=setTimeout(()=>{const o=1-mi();if(fin[o]===null){fin[o]=opp.s;result();}},4000);result();}
+function result(){
+  if(fin[0]===null||fin[1]===null||phase==='over')return;if(phase==='go')return;clearTimeout(finT);phase='over';seats();
+  const w=fin[0]===fin[1]?-1:fin[0]>fin[1]?0:1;status(w<0?'分数一样，平手 🤝':L.nameOf(pair()[w])+'以 '+fin[w]+' 分赢啦！🎉');if(w>=0)ui.burst('🎉');
+}
+function clear(){clearInterval(timer);clearInterval(sendT);clearTimeout(botT);clearTimeout(finT);cdT.forEach(clearTimeout);cdT=[];}
+function newRound(){if(!L.both()){status('等 TA 进入同一个房间…');return;}const kk=k+1,sd=1+Math.floor(Math.random()*2147483646);if(L.mode==='online')L.emit('go',{k:kk,seed:sd});start(kk,sd);}
+document.addEventListener('keydown',e=>{const d={ArrowUp:0,ArrowRight:1,ArrowDown:2,ArrowLeft:3,w:0,d:1,s:2,a:3}[e.key];if(d!==undefined&&phase==='go'){e.preventDefault();move(d);}});
+let sx=0,sy=0;const gridEl=()=>$('grid');
+document.addEventListener('pointerdown',e=>{if(!e.target.closest('#grid'))return;sx=e.clientX;sy=e.clientY;});
+document.addEventListener('pointerup',e=>{if(!e.target.closest('#grid'))return;const dx=e.clientX-sx,dy=e.clientY-sy;if(Math.max(Math.abs(dx),Math.abs(dy))<24)return;move(Math.abs(dx)>Math.abs(dy)?(dx>0?1:3):(dy>0?2:0));});
+$('arrows').onclick=e=>{const b=e.target.closest('button');if(b)move(+b.dataset.d);};
+$('again').textContent='再来一局';
+$('again').onclick=()=>{if(phase==='go'||phase==='count')return;if(L.mode==='online'&&!L.isHost()){L.emit('ask',{});ui.toast('已经喊 TA 开始了');return;}newRound();};
+L=FBLive({key:'g2048',name:'2048',localLabel:'和电脑比',passLabel:false,
+  start(l){draw();if(l.mode!=='online')setTimeout(newRound,600);else status('等 TA 进入同一个房间…');},
+  peers(l){seats();if(l.both()&&phase==='idle'&&l.isHost())setTimeout(()=>{if(phase==='idle')newRound();},1200);},
+  event(d,l){
+    if(!pair().includes(d.from))return;const host=pair()[0],p=pair().indexOf(d.from);
+    if(d.t==='go'&&d.from===host&&Number.isInteger(d.k)&&Number.isInteger(d.seed))start(d.k,d.seed);
+    else if(d.t==='s'&&d.k===k&&Number.isInteger(d.s)&&d.s>=0){opp={s:d.s,mx:+d.mx||0};seats();}
+    else if(d.t==='fin'&&d.k===k&&Number.isInteger(d.s)&&d.s>=0){fin[p]=d.s;opp.s=d.s;seats();result();}
+    else if(d.t==='ask'&&l.isHost()&&phase!=='go'&&phase!=='count')newRound();
+  }});
+
+})();
+</script>
+</body>
+</html>

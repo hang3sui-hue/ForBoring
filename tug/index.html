@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>拔河 · ForBoring</title>
+<link rel="stylesheet" href="../common.css?v=1794620000">
+<style>
+  .stage{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:16px 12px;text-align:center}
+  .eyebrow{font-size:12px;color:var(--muted);letter-spacing:1px}.status{line-height:1.6;min-height:26px;margin:8px 0 14px}
+  .seats{display:flex;gap:10px;margin:12px 0}.seat{flex:1;min-width:0;padding:10px 8px;border:1.5px solid var(--line);border-radius:14px;background:var(--card);font-size:13px;text-align:center;overflow-wrap:anywhere}.seat.active{background:var(--accent-soft);border-color:var(--accent)}.seat b{display:block;font-size:18px;margin-top:2px}
+  .reacts button{font-size:20px;padding:6px 1px}
+  .rope{position:relative;height:56px;margin:6px 4px 14px;border-radius:14px;background:linear-gradient(90deg,#fbe3e7 0 50%,#dce9f6 50% 100%)}
+  .rope::before{content:"";position:absolute;left:4%;right:4%;top:50%;height:6px;margin-top:-3px;border-radius:4px;background:repeating-linear-gradient(90deg,#b8925e 0 8px,#9c7745 8px 16px)}
+  .rope .mid{position:absolute;left:50%;top:6px;bottom:6px;width:2px;background:#c9b8a6}
+  .rope .goal{position:absolute;top:6px;bottom:6px;width:3px;border-radius:2px}.rope .g0{left:10%;background:#d9586b}.rope .g1{right:10%;background:#3f86c9}
+  .knot{position:absolute;top:50%;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;background:#2b2420;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3);transition:left .08s linear}
+  .pullers{display:flex;flex-direction:column;gap:10px}
+  .pull{border:none;width:100%;min-height:190px;border-radius:20px;font-size:24px;font-weight:800;color:#fff;touch-action:manipulation;user-select:none;-webkit-user-select:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+  .pull small{font-size:13px;font-weight:500;opacity:.9}.pull.p0{background:#d9586b}.pull.p1{background:#3f86c9}.pull:disabled{opacity:.45}
+  .pull:active:not(:disabled){filter:brightness(.92)}.pass .pull{min-height:150px}.pull.flip{transform:rotate(180deg)}
+  .count{font-size:44px;font-weight:900;color:var(--accent);min-height:52px}
+
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section id="lobby"><a class="back" href="../">‹ 返回主页</a><h1>拔河</h1><p class="sub">倒数结束后两个人一起狂点，<br>谁先把绳结拉过自己那条线谁赢 🪢</p>
+    <div class="card"><label for="code">房间号（字母或数字）</label><div class="row"><input id="code" maxlength="12" placeholder="比如 love520" autocomplete="off" autocapitalize="off" spellcheck="false"><button id="rand" class="ghost" aria-label="随机房间号">🎲</button></div><button id="join" class="primary block">进入房间</button><div class="divider">或者</div><button id="local" class="ghost block" style="margin-top:6px">先和电脑玩</button><button id="pass" class="ghost block">同一台手机轮流玩</button></div>
+    <p class="hint">20 秒内没人拉过线，就看绳结在谁那边。<br>同一台手机玩时，两个人各点自己那一半屏幕。</p>
+  </section>
+  <section id="game" class="hidden"><div class="topbar"><div id="roomtag" class="roomtag"></div><div class="row" style="gap:6px"><button id="copy" class="ghost small">复制邀请</button><button id="leave" class="ghost small">离开</button></div></div>
+    <div class="seats"><div id="seat0" class="seat"></div><div id="seat1" class="seat"></div></div>
+    <div class="stage"><div id="round" class="eyebrow"></div><div id="status" class="status" role="status" aria-live="polite"></div><div id="count" class="count"></div><div class="rope"><span class="goal g0"></span><span class="mid"></span><span class="goal g1"></span><span id="knot" class="knot" style="left:50%"></span></div><div id="pullers" class="pullers"></div><div id="board"></div></div>
+    <p class="hint" id="caption">红方往左拉，蓝方往右拉。</p><button id="again" class="ghost block">重开一局</button><div id="reacts" class="reacts"></div>
+  </section>
+</div>
+<div id="modal" class="modal hidden"><div class="card"><h3 id="mT"></h3><p id="mP"></p><div class="row" id="mBtns"></div></div></div><div id="toast" class="toast"></div>
+<script src="../common.js?v=1794620000"></script>
+<script src="../mqtt.min.js"></script>
+<script src="../rt.js?v=1794620000"></script>
+<script>
+(() => {
+'use strict';
+
+const $=id=>document.getElementById(id),ui=FB.ui,LEAD=40,TIME=20000;
+let L=null,k=-1,c=[0,0],phase='idle',goAt=0,tick=null,sendT=null,botT=null,lastSent=-1,cdT=[];
+const pair=()=>L.pair(),mi=()=>pair().indexOf(L.me());
+function seats(){for(let p=0;p<2;p++){const id=pair()[p],e=$('seat'+p),b=document.createElement('b');b.textContent=c[p]+' 下';e.replaceChildren(document.createTextNode((p?'🔵 ':'🔴 ')+(id?L.nameOf(id):'等 TA 来')),b);}}
+function build(){
+  const box=$('pullers');box.replaceChildren();box.className='pullers'+(L.mode==='pass'?' pass':'');
+  const who=L.mode==='pass'?[1,0]:[mi()];
+  who.forEach(p=>{if(p<0)return;const b=document.createElement('button');b.className='pull p'+p+(L.mode==='pass'&&p===1?' flip':'');b.dataset.p=p;
+    b.addEventListener('pointerdown',e=>{e.preventDefault();pull(p);});box.appendChild(b);});
+  paint();
+}
+function paint(){
+  const d=c[0]-c[1],x=50-Math.max(-1,Math.min(1,d/LEAD))*40;$('knot').style.left=x+'%';
+  document.querySelectorAll('.pull').forEach(b=>{const p=+b.dataset.p;b.disabled=phase!=='go';b.replaceChildren(document.createTextNode(phase==='go'?'拉！':phase==='count'?'准备…':phase==='over'?'结束':'等待开始'));
+    const s=document.createElement('small');s.textContent=phase==='go'?'狂点这里':'';b.appendChild(s);});
+  seats();
+}
+function status(t){$('status').textContent=t;}
+function pull(p){if(phase!=='go')return;if(L.mode==='online'&&p!==mi())return;c[p]++;paint();if(L.isHost()||L.mode!=='online')judge();}
+function start(kk){
+  clear();k=kk;c=[0,0];phase='count';paint();status('');let n=3;$('count').textContent=n;
+  for(let i=1;i<=3;i++)cdT.push(setTimeout(()=>{n--;$('count').textContent=n||'拉！';if(!n){phase='go';goAt=Date.now();paint();status('把绳结拉过自己那条线就赢');run();}},i*800));
+}
+function run(){
+  tick=setInterval(()=>{if(phase!=='go')return;const left=Math.max(0,Math.ceil((TIME-(Date.now()-goAt))/1000));$('count').textContent=left+'″';if(L.isHost()||L.mode!=='online')judge();},200);
+  if(L.mode==='online')sendT=setInterval(()=>{const m=c[mi()];if(m!==lastSent){lastSent=m;L.emit('n',{k,c:m});}},100);
+  if(L.mode==='bot'){const rate=6.5+Math.random()*2.5;const b=()=>{if(phase!=='go')return;c[1]++;paint();judge();botT=setTimeout(b,1000/rate*(0.7+Math.random()*0.6));};botT=setTimeout(b,250);}
+}
+function judge(){
+  if(phase!=='go')return;const d=c[0]-c[1],timeUp=Date.now()-goAt>=TIME;
+  if(Math.abs(d)>=LEAD||timeUp){const w=d>0?0:d<0?1:-1;if(L.mode==='online')L.emit('end',{k,w,c});finish(w);}
+}
+function finish(w){clear();phase='over';paint();$('count').textContent='';status(w<0?'时间到，打平了 🤝':L.nameOf(pair()[w])+'赢啦！'+c[0]+' : '+c[1]+' 🎉');if(w>=0)ui.burst('💪');}
+function clear(){clearInterval(tick);clearInterval(sendT);clearTimeout(botT);cdT.forEach(clearTimeout);cdT=[];lastSent=-1;}
+function newRound(){if(!L.both()){status('等 TA 进入同一个房间…');return;}const kk=k+1;if(L.mode==='online')L.emit('go',{k:kk});start(kk);}
+$('again').textContent='再来一局';
+$('again').onclick=()=>{if(phase==='go'||phase==='count')return;if(L.mode==='online'&&!L.isHost()){L.emit('ask',{});ui.toast('已经喊 TA 开始了');return;}newRound();};
+L=FBLive({key:'tug',name:'拔河',
+  start(l){build();if(l.mode!=='online')setTimeout(newRound,600);else status('等 TA 进入同一个房间…');},
+  peers(l){build();if(l.both()&&phase==='idle'&&l.isHost())setTimeout(()=>{if(phase==='idle')newRound();},1200);if(!l.both()&&phase!=='over'&&phase!=='idle'){clear();phase='idle';paint();status('TA 离开了');}},
+  event(d,l){
+    if(!pair().includes(d.from))return;const host=pair()[0];
+    if(d.t==='go'&&d.from===host&&Number.isInteger(d.k))start(d.k);
+    else if(d.t==='n'&&d.k===k&&Number.isInteger(d.c)&&d.c>=0&&d.c<5000){const p=pair().indexOf(d.from);if(p>=0&&d.c>c[p]){c[p]=d.c;paint();if(l.isHost())judge();}}
+    else if(d.t==='end'&&d.from===host&&d.k===k&&Array.isArray(d.c)){c=[+d.c[0]||0,+d.c[1]||0];finish(d.w===0||d.w===1?d.w:-1);}
+    else if(d.t==='ask'&&l.isHost()&&phase!=='go'&&phase!=='count')newRound();
+  }});
+
+})();
+</script>
+</body>
+</html>

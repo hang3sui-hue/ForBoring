@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>中国跳棋 · ForBoring</title>
+<link rel="stylesheet" href="../common.css?v=1794620000">
+<style>
+  .stage{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:16px 12px;text-align:center}
+  .eyebrow{font-size:12px;color:var(--muted);letter-spacing:1px}.status{line-height:1.6;min-height:26px;margin:8px 0 14px}
+  .seats{display:flex;gap:10px;margin:12px 0}.seat{flex:1;min-width:0;padding:10px 8px;border:1.5px solid var(--line);border-radius:14px;background:var(--card);font-size:13px;text-align:center;overflow-wrap:anywhere}.seat.active{background:var(--accent-soft);border-color:var(--accent)}.seat b{display:block;font-size:18px;margin-top:2px}
+  .reacts button{font-size:20px;padding:6px 1px}
+  svg{width:100%;max-width:400px;display:block;margin:0 auto;touch-action:manipulation}
+  .h{fill:#e8dccb;stroke:#d8c9b5;stroke-width:1}.h.z0{fill:#f8d9de}.h.z1{fill:#d6e6f6}
+  .h.tg{fill:#fff;stroke:var(--accent);stroke-width:2.5;cursor:pointer}
+  .p{stroke-width:2;cursor:default}.p.s0{fill:#e06a7d;stroke:#b23a4e}.p.s1{fill:#5a9bd8;stroke:#2b679f}
+  .p.mine{cursor:pointer}.p.sel{stroke:#2b2420;stroke-width:3.5}.ring{fill:none;stroke:#2b2420;stroke-width:1.5;stroke-dasharray:3 3}
+  .trail{fill:none;stroke:rgba(43,36,32,.35);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+  .seat .sw{display:inline-block;width:12px;height:12px;border-radius:50%;vertical-align:-1px;margin-right:6px}
+
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section id="lobby"><a class="back" href="../">‹ 返回主页</a><h1>中国跳棋</h1><p class="sub">每次走一步，或者隔着棋子跳过去，<br>能连着跳就一直跳。先把 10 颗棋子全部送到对面的赢 🔷</p>
+    <div class="card"><label for="code">房间号（字母或数字）</label><div class="row"><input id="code" maxlength="12" placeholder="比如 love520" autocomplete="off" autocapitalize="off" spellcheck="false"><button id="rand" class="ghost" aria-label="随机房间号">🎲</button></div><button id="join" class="primary block">进入房间</button><div class="divider">或者</div><button id="local" class="ghost block" style="margin-top:6px">先和电脑玩</button><button id="pass" class="ghost block">同一台手机轮流玩</button></div>
+    <p class="hint">可以跳过自己的棋子，也可以跳过对方的棋子，不会吃掉。<br>红方从下面出发，蓝方从上面出发。</p>
+  </section>
+  <section id="game" class="hidden"><div class="topbar"><div id="roomtag" class="roomtag"></div><div class="row" style="gap:6px"><button id="copy" class="ghost small">复制邀请</button><button id="leave" class="ghost small">离开</button></div></div>
+    <div class="seats"><div id="seat0" class="seat"></div><div id="seat1" class="seat"></div></div>
+    <div class="stage"><div id="round" class="eyebrow"></div><div id="status" class="status" role="status" aria-live="polite"></div><svg id="board" viewBox="0 0 400 400" aria-label="中国跳棋棋盘"></svg></div>
+    <p class="hint" id="caption">白圈是这颗棋子能去的地方；连跳会直接显示终点。</p><button id="again" class="ghost block">重开一局</button><div id="reacts" class="reacts"></div>
+  </section>
+</div>
+<div id="modal" class="modal hidden"><div class="card"><h3 id="mT"></h3><p id="mP"></p><div class="row" id="mBtns"></div></div></div><div id="toast" class="toast"></div>
+<script src="../common.js?v=1794620000"></script>
+<script src="../mqtt.min.js"></script>
+<script src="../turn.js?v=1794620000"></script>
+<script>
+(() => {
+'use strict';
+
+const $=id=>document.getElementById(id);
+// 121 holes of the star board, in axial hex coordinates (q, r)
+const H=[];for(let r=-8;r<=8;r++)for(let q=-8;q<=8;q++){const s=-q-r;if((q>=-4&&r>=-4&&s>=-4)||(q<=4&&r<=4&&s<=4))H.push([q,r]);}
+const IDX=new Map(H.map(([q,r],i)=>[q+','+r,i])),at=(q,r)=>IDX.has(q+','+r)?IDX.get(q+','+r):-1;
+const DIRS=[[1,0],[-1,0],[0,1],[0,-1],[1,-1],[-1,1]];
+const HOME=[H.map((h,i)=>h[1]>=5?i:-1).filter(i=>i>=0),H.map((h,i)=>h[1]<=-5?i:-1).filter(i=>i>=0)]; // side0 starts at bottom, goes to top
+const GOAL=[HOME[1],HOME[0]];
+const START=(()=>{const b=Array(H.length).fill(0);HOME[0].forEach(i=>b[i]=1);HOME[1].forEach(i=>b[i]=2);return b;})();
+function jumps(b,f){ // all landing spots by chains of jumps, with the path to reach them
+  const seen=new Map([[f,[f]]]),q=[f];
+  while(q.length){const c=q.shift(),[x,y]=H[c];for(const [dx,dy] of DIRS){const m=at(x+dx,y+dy),t=at(x+2*dx,y+2*dy);if(m<0||t<0||!b[m]||(b[t]&&t!==f)||seen.has(t))continue;seen.set(t,seen.get(c).concat(t));q.push(t);}}
+  seen.delete(f);return seen;
+}
+function movesFrom(b,f){const out=new Map(),[x,y]=H[f];for(const [dx,dy] of DIRS){const t=at(x+dx,y+dy);if(t>=0&&!b[t])out.set(t,[f,t]);}for(const [t,p] of jumps(b,f))if(!out.has(t))out.set(t,p);return out;}
+function legalPath(b,p,s){
+  if(!Array.isArray(p)||p.length<2||p.length>40||!p.every(i=>Number.isInteger(i)&&i>=0&&i<H.length))return false;
+  if(b[p[0]]!==s+1)return false;
+  if(p.length===2){const [x,y]=H[p[0]],[u,v]=H[p[1]];if(!b[p[1]]&&DIRS.some(([dx,dy])=>x+dx===u&&y+dy===v))return true;}
+  const t=b.slice();t[p[0]]=0;const used=new Set([p[0]]);
+  for(let i=1;i<p.length;i++){const [x,y]=H[p[i-1]],[u,v]=H[p[i]],dx=(u-x)/2,dy=(v-y)/2;
+    if(!DIRS.some(d=>d[0]===dx&&d[1]===dy)||t[p[i]]||used.has(p[i]))return false;const m=at(x+dx,y+dy);if(m<0||!t[m])return false;used.add(p[i]);}
+  return true;
+}
+const done=(b,s)=>GOAL[s].every(i=>b[i]===s+1);
+function replay(st){
+  const b=START.slice(),first=st.game%2;let turn=first,last=null,win=-1;const sideOf=p=>p===first?0:1;
+  for(const p of st.moves){if(win>=0)return null;const s=sideOf(turn);if(!legalPath(b,p,s))return null;b[p[p.length-1]]=s+1;b[p[0]]=0;last=p;if(done(b,s))win=s;turn=1-turn;}
+  const draw=win<0&&st.moves.length>=400;
+  const inGoal=[0,1].map(s=>GOAL[s].filter(i=>b[i]===s+1).length);
+  return {b,turn,first,sideOf,last,inGoal,done:win>=0||draw,winner:win>=0?(sideOf(0)===win?0:1):draw?-1:null};
+}
+// Computer: pick the move that brings a piece furthest towards the far corner; prefer moving the pieces left behind.
+function bot(pos){
+  const s=pos.sideOf(pos.turn),dir=s===0?-1:1,b=pos.b;let best=-Infinity,pick=null;
+  const tip=s===0?-8:8;
+  for(let f=0;f<H.length;f++){if(b[f]!==s+1)continue;
+    for(const [t,p] of movesFrom(b,f)){
+      const gain=(H[t][1]-H[f][1])*dir,back=Math.abs(H[f][1]-tip),cent=-Math.abs(H[t][0]+H[t][1]/2)*0.3;
+      let sc=gain*10+back*0.6+cent+Math.random();
+      if(GOAL[s].includes(f)&&!GOAL[s].includes(t))sc-=30;
+      if(sc>best){best=sc;pick=p;}
+    }}
+  return pick;
+}
+let sel=-1,PLAY=null;const NS='http://www.w3.org/2000/svg',el=(t,a)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e;};
+const DX=22,DY=19.05;
+const G=FBTurn({key:'checkers',name:'中国跳棋',maxMoves:400,replay,bot,botDelay:600,
+  seat(p,c){const {st,pos,nameOf}=c,s=pos?pos.sideOf(p):p,sw=document.createElement('span');sw.className='sw';sw.style.background=s?'#5a9bd8':'#e06a7d';
+    const n=document.createElement('b');n.textContent=(pos?pos.inGoal[s]:0)+' / 10';return [sw,(st?nameOf(st.players[p]):p?'等 TA 来':'先手玩家')+(s?' · 蓝方':' · 红方先手'),n];},
+  turnText(c){const {pos,can,mode,nameOf,st}=c;return can?'轮到'+(mode==='pass'?nameOf(st.players[pos.turn]):'你')+'：点棋子，再点要去的位置':nameOf(st.players[pos.turn])+'正在想…';},
+  doneText(c){const {pos,st,nameOf}=c;return pos.winner<0?'走了太多步，算平手 🤝':nameOf(st.players[pos.winner])+'把 10 颗棋子全部送到了对面，赢啦！🎉';},
+  draw(c){
+    PLAY=c.play;const {pos,can,st,mode,me}=c,svg=$('board');svg.replaceChildren();
+    const s=can?pos.sideOf(pos.turn):-1;if(sel>=0&&(!can||pos.b[sel]!==s+1))sel=-1;
+    const opts=sel>=0?movesFrom(pos.b,sel):new Map();
+    const flip=mode==='online'&&st.players.indexOf(me)>=0&&pos.sideOf(st.players.indexOf(me))===1;
+    const xy=i=>{let [q,r]=H[i];if(flip){q=-q;r=-r;}return [200+(q+r/2)*DX,200+r*DY];};
+    const z0=new Set(HOME[0]),z1=new Set(HOME[1]);
+    if(pos.last){const pts=pos.last.map(i=>xy(i).join(',')).join(' ');svg.appendChild(el('polyline',{points:pts,class:'trail'}));}
+    H.forEach((h,i)=>{const [x,y]=xy(i);const c=el('circle',{cx:x,cy:y,r:7.5,class:'h'+(z0.has(i)?' z0':z1.has(i)?' z1':'')+(opts.has(i)?' tg':'')});
+      if(opts.has(i))c.addEventListener('click',()=>{const p=opts.get(i);sel=-1;PLAY&&PLAY(p);});svg.appendChild(c);
+      const v=pos.b[i];if(v){const p=el('circle',{cx:x,cy:y,r:8.5,class:'p s'+(v-1)+(v===s+1?' mine':'')+(i===sel?' sel':'')});
+        if(v===s+1)p.addEventListener('click',()=>{sel=sel===i?-1:i;G.render();});svg.appendChild(p);}
+      if(pos.last&&i===pos.last[pos.last.length-1])svg.appendChild(el('circle',{cx:x,cy:y,r:12,class:'ring'}));
+    });
+  }});
+
+})();
+</script>
+</body>
+</html>

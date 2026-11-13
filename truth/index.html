@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>真心话大冒险 · ForBoring</title>
+<link rel="stylesheet" href="../common.css?v=1794620000">
+<style>
+  .stage{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:16px 12px;text-align:center}
+  .eyebrow{font-size:12px;color:var(--muted);letter-spacing:1px}.status{line-height:1.6;min-height:26px;margin:8px 0 14px}
+  .seats{display:flex;gap:10px;margin:12px 0}.seat{flex:1;min-width:0;padding:10px 8px;border:1.5px solid var(--line);border-radius:14px;background:var(--card);font-size:13px;text-align:center;overflow-wrap:anywhere}.seat.active{background:var(--accent-soft);border-color:var(--accent)}.seat b{display:block;font-size:18px;margin-top:2px}
+  .reacts button{font-size:20px;padding:6px 1px}
+  .lv{display:flex;gap:6px;justify-content:center;margin-bottom:10px}.lv button{padding:7px 14px;font-size:13px}.lv button.on{background:var(--accent);color:#fff}
+  .who{display:flex;gap:10px;margin:6px 0 12px}.who div{flex:1;padding:14px 6px;border-radius:14px;background:#f3ebe0;font-weight:700;transition:all .15s}.who div.hi{background:var(--accent);color:#fff;transform:scale(1.04)}
+  .qcard{min-height:110px;border-radius:18px;background:#fff;border:1.5px solid var(--line);padding:18px 16px;font-size:19px;line-height:1.55;font-weight:600;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:6px}
+  .qcard .k{font-size:12px;font-weight:700;letter-spacing:2px;color:var(--accent)}.qcard .k.d{color:#3f86c9}
+  .acts{display:flex;gap:8px;margin-top:12px}.acts button{flex:1;padding:13px 6px}
+  .addq{margin-top:14px;text-align:left}.addq .row{gap:6px}.addq input{font-size:15px;letter-spacing:0;text-transform:none;padding:9px 11px}.addq select{font:inherit;border:1.5px solid var(--line);border-radius:12px;background:#fff;padding:0 6px}
+  .mini{font-size:12px;color:var(--muted);margin-top:8px}
+
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section id="lobby"><a class="back" href="../">‹ 返回主页</a><h1>真心话大冒险</h1><p class="sub">转一下看轮到谁，被转到的人选真心话还是大冒险。<br>说不出口？那就做大冒险吧 💬</p>
+    <div class="card"><label for="code">房间号（字母或数字）</label><div class="row"><input id="code" maxlength="12" placeholder="比如 love520" autocomplete="off" autocapitalize="off" spellcheck="false"><button id="rand" class="ghost" aria-label="随机房间号">🎲</button></div><button id="join" class="primary block">进入房间</button><div class="divider">或者</div><button id="local" class="ghost block" style="margin-top:6px">先和电脑玩</button><button id="pass" class="ghost block">同一台手机轮流玩</button></div>
+    <p class="hint">题库分轻松、心动、刺激三档，也可以自己加题。<br>联机时两边看到的是同一道题。</p>
+  </section>
+  <section id="game" class="hidden"><div class="topbar"><div id="roomtag" class="roomtag"></div><div class="row" style="gap:6px"><button id="copy" class="ghost small">复制邀请</button><button id="leave" class="ghost small">离开</button></div></div>
+    <div class="seats"><div id="seat0" class="seat"></div><div id="seat1" class="seat"></div></div>
+    <div class="stage"><div id="round" class="eyebrow"></div><div id="status" class="status" role="status" aria-live="polite"></div><div class="lv"><button data-l="0" class="ghost">轻松</button><button data-l="1" class="ghost">心动</button><button data-l="2" class="ghost">刺激</button></div>
+<div id="who" class="who"></div><div id="qcard" class="qcard"></div><div id="acts" class="acts"></div>
+<div class="addq"><div class="row"><select id="addKind"><option value="t">真心话</option><option value="d">大冒险</option></select><input id="addText" maxlength="60" placeholder="自己加一道题"><button id="addBtn" class="ghost">加</button></div><div id="mini" class="mini"></div></div></div>
+    <p class="hint" id="caption"></p><button id="again" class="ghost block">重开一局</button><div id="reacts" class="reacts"></div>
+  </section>
+</div>
+<div id="modal" class="modal hidden"><div class="card"><h3 id="mT"></h3><p id="mP"></p><div class="row" id="mBtns"></div></div></div><div id="toast" class="toast"></div>
+<script src="../common.js?v=1794620000"></script>
+<script src="../mqtt.min.js"></script>
+<script src="../rt.js?v=1794620000"></script>
+<script>
+(() => {
+'use strict';
+
+const $=id=>document.getElementById(id),ui=FB.ui,BANK={"t": [["你最喜欢我身上哪一点？", "第一次见我的时候，你心里在想什么？", "你小时候最丢脸的一件事是什么？", "最近一次偷偷笑出声是因为什么？", "如果明天放假一天，你最想和我做什么？", "你手机里最舍不得删的一张照片是什么？", "你觉得我最像哪种动物？为什么？", "有什么事你一直想做但还没做？", "你最近一次哭是因为什么？", "你觉得我们俩谁更容易吃醋？", "说一个你从没告诉过我的小习惯", "你最想回到哪一天重新过一次？", "你最怕我发现你的哪个缺点？", "如果只能吃一种食物过一年，你选什么？"], ["你是什么时候确定自己喜欢我的？", "我做过的哪件小事让你特别心动？", "你最想和我一起去哪里旅行？", "你偷偷看过我的哪张照片最多次？", "你梦到过我吗？梦里发生了什么？", "我们第一次牵手的时候你紧张吗？", "你觉得我们之间最浪漫的一刻是哪次？", "如果可以，你最想听我对你说哪句话？", "异地的时候，你最想我的是哪个时刻？", "你会怎么跟朋友形容我？", "你想象过我们十年后的样子吗？说说看", "我哪个表情最让你受不了（褒义）？", "你最想收到我送的什么礼物？", "说一件你为我做过、但我可能不知道的事"], ["你做过最疯狂的一件事是什么？", "你吃过最奇怪的醋是什么？", "你对我说过的最大的谎是什么？", "如果我们吵架，你最想对我说但没说出口的话是什么？", "你前任身上有没有一个优点是我没有的？", "你最想让我改掉的一个习惯是什么？", "你有没有偷偷翻过我的东西？", "你最受不了我哪一点？说实话", "有没有哪一刻你觉得我们可能走不下去？", "说一个你到现在都没敢告诉我的秘密", "你觉得我最不像我自己的一次是什么时候？", "如果可以重新认识我，你会做什么不一样的事？", "你人生中最后悔的一个决定是什么？", "我身上有什么是你一开始不喜欢、后来却喜欢上的？"]], "d": [["用最夸张的语气说一遍“我爱吃香菜”", "模仿一个你认识的人，让对方猜是谁", "用三个表情包形容你今天的心情，发给对方", "唱一首歌的副歌部分", "做一个你能做出的最丑的鬼脸，并截图", "用方言说一句“今晚吃什么”", "闭眼画一只猫，拍照发给对方", "接下来三句话都要以“喵”结尾", "说一个冷笑话，对方没笑就再说一个", "用左手（不常用的手）写下对方的名字发给对方", "表演一段 10 秒钟的广告，推销你身边的一样东西", "把手机里最近一张截图发给对方看"], ["给对方唱一首情歌的一句", "发一条只有对方能看懂的暗号", "用 20 个字夸对方，不能重复", "录一段 10 秒钟的语音，说今天最想对 TA 说的话", "把对方的备注改成 TA 指定的名字，保持三天", "说出对方三个让你心动的瞬间", "给对方写一句土味情话并发出去", "模仿对方生气时的样子", "拍一张你现在看到的风景发给对方", "用一句诗形容对方", "告诉对方你今天想 TA 了几次（要说实话）", "对着镜头比一个爱心，拍下来发给对方"], ["让对方随便翻你的相册 30 秒", "把你和对方的第一条聊天记录截图发出来", "发一条朋友圈夸对方，至少保留一小时", "让对方用你的手机给你的一个好友发一句（正常的）问候", "打电话给一个朋友，说你今天特别开心", "把你的手机壁纸换成对方选的图片，保持一天", "说出你对对方最大的一个担心", "让对方决定你下一顿吃什么", "给对方讲一件你从没跟别人讲过的糗事", "用 30 秒说出你们之间最难忘的一件事", "让对方提一个小要求，你必须答应", "删掉一个对方指定的（不重要的）手机 App"]]},LV=['轻松','心动','刺激'];
+let L=null,S=null;
+const pair=()=>L.pair();
+const blank=()=>({v:0,level:0,who:-1,kind:'',q:'',spin:0,custom:{t:[],d:[]},used:[],done:[0,0]});
+const clean=t=>String(t||'').replace(/[\u0000-\u001f<>]/g,'').trim().slice(0,60);
+function ok(s){return s&&Number.isSafeInteger(s.v)&&[0,1,2].includes(s.level)&&[-1,0,1].includes(s.who)&&['','t','d'].includes(s.kind)&&typeof s.q==='string'&&s.q.length<=80&&s.custom&&Array.isArray(s.custom.t)&&Array.isArray(s.custom.d)&&s.custom.t.length<=50&&s.custom.d.length<=50&&Array.isArray(s.used)&&Array.isArray(s.done);}
+function set(ch){const n=Object.assign(JSON.parse(JSON.stringify(S)),ch);n.v=S.v+1;S=n;if(L.mode==='online')L.net.setState(S);render();}
+function pick(kind,level){const pool=BANK[kind][level].map((q,i)=>[q,kind+level+':'+i]).concat(S.custom[kind].map((q,i)=>[q,kind+'c:'+i]));
+  let left=pool.filter(([,k])=>!S.used.includes(k));if(!left.length)left=pool;const [q,key]=left[Math.floor(Math.random()*left.length)];return {q,used:S.used.concat(key).slice(-150)};}
+const canAct=()=>L.mode!=='online'||L.both();
+const mine=()=>L.mode!=='online'||(S.who>=0&&pair()[S.who]===L.myId);
+function spin(){if(!canAct())return;const who=Math.random()<0.5?0:1;set({who,kind:'',q:'',spin:S.spin+1});}
+function choose(kind){if(S.who<0||!mine())return;const r=pick(kind,S.level);set({kind,q:r.q,used:r.used});}
+function render(){
+  if(!S)return;
+  for(let p=0;p<2;p++){const id=pair()[p],e=$('seat'+p),b=document.createElement('b');b.textContent='完成 '+(S.done[p]||0)+' 次';e.replaceChildren(document.createTextNode(id?L.nameOf(id):'等 TA 来'),b);}
+  document.querySelectorAll('.lv button').forEach(b=>b.classList.toggle('on',+b.dataset.l===S.level));
+  const w=$('who');w.replaceChildren();[0,1].forEach(p=>{const d=document.createElement('div');d.textContent=pair()[p]?L.nameOf(pair()[p]):'等 TA 来';if(S.who===p)d.className='hi';w.appendChild(d);});
+  const c=$('qcard');c.replaceChildren();const a=$('acts');a.replaceChildren();
+  const btn=(t,f,cls)=>{const b=document.createElement('button');b.textContent=t;if(cls)b.className=cls;b.onclick=f;a.appendChild(b);return b;};
+  const name=S.who>=0?(pair()[S.who]?L.nameOf(pair()[S.who]):'TA'):'';
+  if(!canAct()){c.textContent='等 TA 进入同一个房间…';$('status').textContent='';return;}
+  if(S.who<0){c.textContent='点下面的按钮，看看轮到谁 👇';btn('转一下 🎯',spin,'primary');$('status').textContent='选好难度，然后转一下';}
+  else if(!S.kind){c.textContent='轮到 '+name+' 啦！选真心话还是大冒险？';$('status').textContent=mine()?'轮到你选':'等 '+name+' 选…';
+    const t=btn('真心话 💬',()=>choose('t'),'primary'),d=btn('大冒险 🎲',()=>choose('d'),'primary');t.disabled=d.disabled=!mine();}
+  else{const k=document.createElement('div');k.className='k'+(S.kind==='d'?' d':'');k.textContent=(S.kind==='t'?'真心话':'大冒险')+' · '+LV[S.level]+' · '+name;const q=document.createElement('div');q.textContent=S.q;c.append(k,q);
+    $('status').textContent=mine()?'轮到你：'+(S.kind==='t'?'老实回答哦':'说到做到哦'):'等 '+name+' 完成…';
+    btn('换一题',()=>{const r=pick(S.kind,S.level);set({q:r.q,used:r.used});},'ghost');
+    btn('完成 ✅',()=>{const d=S.done.slice();d[S.who]=(d[S.who]||0)+1;set({done:d,who:-1,kind:'',q:''});ui.burst(S.kind==='t'?'💬':'🎉');},'primary');}
+  $('mini').textContent='自定义题目：真心话 '+S.custom.t.length+' 道，大冒险 '+S.custom.d.length+' 道';
+}
+document.querySelectorAll('.lv button').forEach(b=>b.onclick=()=>{if(canAct())set({level:+b.dataset.l});});
+$('addBtn').onclick=()=>{const t=clean($('addText').value);if(!t){ui.toast('先写一道题');return;}if(!canAct())return;const k=$('addKind').value,c=JSON.parse(JSON.stringify(S.custom));if(c[k].length>=50){ui.toast('自定义题目最多 50 道');return;}c[k].push(t);set({custom:c});$('addText').value='';ui.toast('加好了，转到的时候可能会抽到');};
+$('again').textContent='清空记录，重新开始';
+$('again').onclick=()=>ui.modal('重新开始？','完成次数会清零，自定义的题目会保留。',[{label:'取消'},{label:'重新开始',primary:true,fn:()=>set({who:-1,kind:'',q:'',done:[0,0],used:[]})}]);
+L=FBLive({key:'truth',name:'真心话大冒险',localLabel:false,passLabel:'同一台手机玩',
+  start(l){if(!S)S=blank();if(l.mode==='online')setTimeout(()=>{if(S.v===0&&l.isHost()&&l.both())l.net.setState(S);render();},1500);render();},
+  peers(l){render();},
+  state(s,l){if(!ok(s)||(S&&s.v<=S.v&&S.v>0))return;const prevSpin=S?S.spin:0;S=JSON.parse(JSON.stringify(s));S.custom.t=S.custom.t.map(clean).filter(Boolean);S.custom.d=S.custom.d.map(clean).filter(Boolean);
+    if(S.spin!==prevSpin&&S.who>=0)ui.toast('转到了 '+(pair()[S.who]?L.nameOf(pair()[S.who]):'TA')+'！');render();}
+});
+
+})();
+</script>
+</body>
+</html>

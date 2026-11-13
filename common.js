@@ -26,7 +26,10 @@ window.FB = (() => {
     hub: { n: '大厅', cap: 2 }, gomoku: { n: '五子棋', cap: 2 }, rps: { n: '石头剪刀布', cap: 2 }, battleship: { n: '海战棋', cap: 2 },
     bomb: { n: '数字炸弹', cap: 2 }, jenga: { n: '抽积木', cap: 2 }, roulette: { n: '俄罗斯轮盘', cap: 2 }, blackjack: { n: '21 点', cap: 2 },
     typing: { n: '打字比赛', cap: 2 }, connect4: { n: '四子棋', cap: 2 }, tacit: { n: '默契大考验', cap: 2 }, tictactoe: { n: '井字棋', cap: 2 },
-    quoridor: { n: '步步为营', cap: 2 }, reversi: { n: '黑白棋', cap: 2 }, dots: { n: '点格棋', cap: 2 }, memory: { n: '翻牌配对', cap: 2 }
+    quoridor: { n: '步步为营', cap: 2 }, reversi: { n: '黑白棋', cap: 2 }, dots: { n: '点格棋', cap: 2 }, memory: { n: '翻牌配对', cap: 2 },
+    uttt: { n: '终极井字棋', cap: 2 }, jungle: { n: '斗兽棋', cap: 2 }, checkers: { n: '中国跳棋', cap: 2 }, g2048: { n: '2048', cap: 2 },
+    reaction: { n: '反应力测试', cap: 2 }, tron: { n: '光速摩托', cap: 2 }, tug: { n: '拔河', cap: 2 }, mole: { n: '打地鼠', cap: 2 },
+    truth: { n: '真心话大冒险', cap: 2 }, wheel: { n: '幸运转盘', cap: 2 }
   };
 
   // ---- public lobby: a room is private unless you choose to show it in the lobby ----

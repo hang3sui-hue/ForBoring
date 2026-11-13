@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>斗兽棋 · ForBoring</title>
+<link rel="stylesheet" href="../common.css?v=1794620000">
+<style>
+  .stage{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:16px 12px;text-align:center}
+  .eyebrow{font-size:12px;color:var(--muted);letter-spacing:1px}.status{line-height:1.6;min-height:26px;margin:8px 0 14px}
+  .seats{display:flex;gap:10px;margin:12px 0}.seat{flex:1;min-width:0;padding:10px 8px;border:1.5px solid var(--line);border-radius:14px;background:var(--card);font-size:13px;text-align:center;overflow-wrap:anywhere}.seat.active{background:var(--accent-soft);border-color:var(--accent)}.seat b{display:block;font-size:18px;margin-top:2px}
+  .reacts button{font-size:20px;padding:6px 1px}
+  .jb{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px;max-width:370px;margin:0 auto;background:#8fae7a;padding:5px;border-radius:12px}
+  .q{aspect-ratio:1;min-width:0;padding:0;border:none;border-radius:5px;background:#cfe0b8;position:relative;display:flex;align-items:center;justify-content:center}
+  .q:disabled{opacity:1;cursor:default}.q.w{background:#8ec5e6}.q.t{background:#e9d3a4}.q.d0,.q.d1{background:#d8b37a}
+  .q.d0::before,.q.d1::before{content:"穴";position:absolute;font-size:11px;color:#7a5530;opacity:.7}.q.t::before{content:"陷";position:absolute;font-size:10px;color:#9b7a43;opacity:.6}
+  .pc{position:relative;z-index:1;width:88%;height:88%;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:clamp(14px,4.6vw,22px);line-height:1;box-shadow:0 2px 4px rgba(0,0,0,.25)}
+  .pc small{font-size:clamp(8px,2.3vw,11px);font-weight:800;margin-top:1px}
+  .pc.s0{background:#fde3e6;border:2.5px solid #d9586b;color:#b23a4e}.pc.s1{background:#dbe9f7;border:2.5px solid #3f86c9;color:#2b679f}
+  .q.sel .pc{box-shadow:0 0 0 3px #fff,0 0 0 6px var(--accent)}
+  .q.tg::after{content:"";position:absolute;width:30%;height:30%;border-radius:50%;background:rgba(217,88,107,.55);z-index:2}
+  .q.tg.cap::after{width:84%;height:84%;background:transparent;border:3px solid rgba(217,88,107,.85)}
+  .q.last{box-shadow:inset 0 0 0 2px #fff}
+  .seat .sw{display:inline-block;width:12px;height:12px;border-radius:50%;vertical-align:-1px;margin-right:6px}
+  .legend{font-size:11.5px;color:var(--muted);margin-top:10px;line-height:1.7}
+
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section id="lobby"><a class="back" href="../">‹ 返回主页</a><h1>斗兽棋</h1><p class="sub">象 > 狮 > 虎 > 豹 > 狼 > 狗 > 猫 > 鼠，大的吃小的，<br>但老鼠能吃大象。先钻进对方兽穴的赢 🐘</p>
+    <div class="card"><label for="code">房间号（字母或数字）</label><div class="row"><input id="code" maxlength="12" placeholder="比如 love520" autocomplete="off" autocapitalize="off" spellcheck="false"><button id="rand" class="ghost" aria-label="随机房间号">🎲</button></div><button id="join" class="primary block">进入房间</button><div class="divider">或者</div><button id="local" class="ghost block" style="margin-top:6px">先和电脑玩</button><button id="pass" class="ghost block">同一台手机轮流玩</button></div>
+    <p class="hint">老鼠能下河；狮子和老虎能跳过河，但河里有老鼠挡着就跳不了。<br>走进对方的陷阱，谁都能吃掉你。不能走进自己的兽穴。</p>
+  </section>
+  <section id="game" class="hidden"><div class="topbar"><div id="roomtag" class="roomtag"></div><div class="row" style="gap:6px"><button id="copy" class="ghost small">复制邀请</button><button id="leave" class="ghost small">离开</button></div></div>
+    <div class="seats"><div id="seat0" class="seat"></div><div id="seat1" class="seat"></div></div>
+    <div class="stage"><div id="round" class="eyebrow"></div><div id="status" class="status" role="status" aria-live="polite"></div><div id="board" class="jb" aria-label="斗兽棋棋盘"></div><div class="legend">蓝色是河 · 黄色是陷阱 · 棕色是兽穴</div></div>
+    <p class="hint" id="caption">红方先手，每局交换。</p><button id="again" class="ghost block">重开一局</button><div id="reacts" class="reacts"></div>
+  </section>
+</div>
+<div id="modal" class="modal hidden"><div class="card"><h3 id="mT"></h3><p id="mP"></p><div class="row" id="mBtns"></div></div></div><div id="toast" class="toast"></div>
+<script src="../common.js?v=1794620000"></script>
+<script src="../mqtt.min.js"></script>
+<script src="../turn.js?v=1794620000"></script>
+<script>
+(() => {
+'use strict';
+
+const $=id=>document.getElementById(id);
+const R=9,C=7,NAME=['','鼠','猫','狗','狼','豹','虎','狮','象'],EMO=['','🐭','🐱','🐶','🐺','🐆','🐯','🦁','🐘'],VAL=[0,40,20,30,35,45,70,80,75];
+const W=new Set();for(let r=3;r<=5;r++)for(const c of [1,2,4,5])W.add(r*C+c);
+const DEN=[59,3],TRAP=[new Set([58,60,52]),new Set([2,4,10])];
+const START=(()=>{const b=Array(63).fill(0),top=[[0,0,7],[0,6,6],[1,1,3],[1,5,2],[2,0,1],[2,2,5],[2,4,4],[2,6,8]];
+  for(const [r,c,k] of top){b[r*C+c]=10+k;b[(8-r)*C+(6-c)]=k;}return b;})();
+const side=v=>v>=10?1:0,rank=v=>v%10;
+function canCap(b,f,t){
+  const a=b[f],d=b[t];if(W.has(f)&&!W.has(t))return false;if(!W.has(f)&&W.has(t))return false;
+  if(TRAP[side(a)].has(t))return true;const ka=rank(a),kd=rank(d);
+  if(ka===1&&kd===8)return true;if(ka===8&&kd===1)return false;return ka>=kd;
+}
+function targets(b,f){
+  const v=b[f];if(!v)return [];const s=side(v),k=rank(v),r0=Math.floor(f/C),c0=f%C,out=[];
+  for(const [dr,dc] of [[1,0],[-1,0],[0,1],[0,-1]]){
+    let r=r0+dr,c=c0+dc;if(r<0||r>=R||c<0||c>=C)continue;let t=r*C+c;
+    if(W.has(t)&&k!==1){
+      if(k!==6&&k!==7)continue;let blocked=false;
+      while(W.has(t)){if(b[t])blocked=true;r+=dr;c+=dc;t=r*C+c;}
+      if(blocked)continue;
+    }
+    if(t===DEN[s])continue;
+    if(b[t]){if(side(b[t])===s||!canCap(b,f,t))continue;}
+    out.push(t);
+  }
+  return out;
+}
+function allMoves(b,s){const m=[];for(let i=0;i<63;i++)if(b[i]&&side(b[i])===s)for(const t of targets(b,i))m.push(i*63+t);return m;}
+function apply(b,m){const f=Math.floor(m/63),t=m%63;b[t]=b[f];b[f]=0;return t;}
+function status(b,s,lastTo){ // returns winning side or -1
+  if(lastTo>=0&&(lastTo===DEN[1]||lastTo===DEN[0]))return side(b[lastTo]);
+  return -1;
+}
+function replay(st){
+  const b=START.slice(),first=st.game%2;let turn=first,last=-1,from=-1,win=-1;
+  const sideOf=p=>p===first?0:1;
+  for(const m of st.moves){
+    if(win>=0||!Number.isInteger(m))return null;const s=sideOf(turn);
+    if(!allMoves(b,s).includes(m))return null;from=Math.floor(m/63);last=apply(b,m);
+    if(last===DEN[1-s])win=s;turn=1-turn;
+  }
+  const s=sideOf(turn);let moves=win<0?allMoves(b,s):[];
+  if(win<0&&!moves.length)win=1-s;
+  const draw=win<0&&st.moves.length>=300;
+  const pc=[0,1].map(x=>b.filter(v=>v&&side(v)===x).length);
+  return {b,turn,first,last,from,moves,sideOf,pc,done:win>=0||draw,winner:win>=0?(sideOf(0)===win?0:1):draw?-1:null,why:win>=0&&last===DEN[1-side(b[last]||0)]?'den':'stuck'};
+}
+function evalB(b,s){
+  let v=0;for(let i=0;i<63;i++){const x=b[i];if(!x)continue;const sd=side(x),k=rank(x),dr=Math.floor(i/C),dc=i%C,den=DEN[1-sd],dist=Math.abs(dr-Math.floor(den/C))+Math.abs(dc-den%C);
+    let sc=VAL[k]+(14-dist)*2+(dist===1?40:0);v+=sd===s?sc:-sc;}
+  return v;
+}
+function search(b,s,depth,alpha,beta){
+  const ms=allMoves(b,s);if(!ms.length)return -9999;
+  if(depth===0)return evalB(b,s);
+  let best=-Infinity;
+  for(const m of ms){const n=b.slice(),t=apply(n,m);let sc;if(t===DEN[1-s])sc=9000+depth;else sc=-search(n,1-s,depth-1,-beta,-alpha);
+    if(sc>best)best=sc;if(sc>alpha)alpha=sc;if(alpha>=beta)break;}
+  return best;
+}
+function bot(pos){
+  const s=pos.sideOf(pos.turn);let best=-Infinity,pick=pos.moves[0];
+  const ms=pos.moves.slice().sort(()=>Math.random()-.5);
+  for(const m of ms){const n=pos.b.slice(),t=apply(n,m);const sc=t===DEN[1-s]?99999:-search(n,1-s,2,-Infinity,Infinity);if(sc>best){best=sc;pick=m;}}
+  return pick;
+}
+let sel=-1,PLAY=null;
+const G=FBTurn({key:'jungle',name:'斗兽棋',maxMoves:300,replay,bot,botDelay:600,
+  seat(p,c){const {st,pos,nameOf}=c,s=pos?pos.sideOf(p):p,sw=document.createElement('span');sw.className='sw';sw.style.background=s?'#3f86c9':'#d9586b';
+    const n=document.createElement('b');n.textContent=(pos?pos.pc[s]:8)+' 只';return [sw,(st?nameOf(st.players[p]):p?'等 TA 来':'先手玩家')+(s?' · 蓝方':' · 红方先手'),n];},
+  turnText(c){const {pos,can,mode,nameOf,st}=c;return can?'轮到'+(mode==='pass'?nameOf(st.players[pos.turn]):'你')+'：先点自己的棋子，再点要去的格子':nameOf(st.players[pos.turn])+'正在想…';},
+  doneText(c){const {pos,st,nameOf}=c;if(pos.winner<0)return '走了太多步，算平手 🤝';const w=nameOf(st.players[pos.winner]);
+    return pos.last===DEN[0]||pos.last===DEN[1]?w+'钻进了对方的兽穴，赢啦！🎉':w+'把对方逼得无路可走，赢啦！🎉';},
+  draw(c){
+    PLAY=c.play;const {pos,can,st,mode,me}=c,box=$('board');box.replaceChildren();
+    const mySide=can?pos.sideOf(pos.turn):-1;
+    if(sel>=0&&(!can||!pos.b[sel]||side(pos.b[sel])!==mySide))sel=-1;
+    const tg=new Set(sel>=0?pos.moves.filter(m=>Math.floor(m/63)===sel).map(m=>m%63):[]);
+    const flip=mode==='online'&&st.players.indexOf(me)>=0&&pos.sideOf(st.players.indexOf(me))===1;
+    for(let d=0;d<63;d++){
+      const i=flip?62-d:d,v=pos.b[i],e=document.createElement('button');
+      e.className='q'+(W.has(i)?' w':'')+(TRAP[0].has(i)||TRAP[1].has(i)?' t':'')+(i===DEN[0]?' d0':i===DEN[1]?' d1':'')+(i===sel?' sel':'')+(tg.has(i)?' tg'+(v?' cap':''):'')+(i===pos.last||i===pos.from?' last':'');
+      e.dataset.i=i;e.disabled=!can||!(tg.has(i)||(v&&side(v)===mySide));
+      if(v){const p=document.createElement('span');p.className='pc s'+side(v);p.textContent=EMO[rank(v)];const sm=document.createElement('small');sm.textContent=NAME[rank(v)];p.appendChild(sm);e.appendChild(p);}
+      e.setAttribute('aria-label',(v?(side(v)?'蓝':'红')+NAME[rank(v)]:'空格')+(W.has(i)?'，河':''));
+      box.appendChild(e);
+    }
+  }});
+$('board').onclick=e=>{const q=e.target.closest('button.q');if(!q||q.disabled)return;const i=+q.dataset.i;
+  if(q.classList.contains('tg')&&sel>=0){const m=sel*63+i;sel=-1;PLAY&&PLAY(m);return;}
+  sel=sel===i?-1:i;G.render();};
+
+})();
+</script>
+</body>
+</html>

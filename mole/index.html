@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>打地鼠 · ForBoring</title>
+<link rel="stylesheet" href="../common.css?v=1794620000">
+<style>
+  .stage{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:16px 12px;text-align:center}
+  .eyebrow{font-size:12px;color:var(--muted);letter-spacing:1px}.status{line-height:1.6;min-height:26px;margin:8px 0 14px}
+  .seats{display:flex;gap:10px;margin:12px 0}.seat{flex:1;min-width:0;padding:10px 8px;border:1.5px solid var(--line);border-radius:14px;background:var(--card);font-size:13px;text-align:center;overflow-wrap:anywhere}.seat.active{background:var(--accent-soft);border-color:var(--accent)}.seat b{display:block;font-size:18px;margin-top:2px}
+  .reacts button{font-size:20px;padding:6px 1px}
+  .count{font-size:40px;font-weight:900;color:var(--accent);min-height:48px}
+  .fields{display:flex;flex-direction:column;gap:12px}
+  .field{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;max-width:340px;margin:0 auto;width:100%;background:#a9c98b;padding:10px;border-radius:18px}
+  .field.flip{transform:rotate(180deg)}.pass .field{max-width:250px;gap:6px;padding:7px}
+  .hole{position:relative;aspect-ratio:1;min-width:0;padding:0;border:none;border-radius:50%;background:radial-gradient(ellipse at 50% 70%,#4b3a2a 0 45%,#6b5240 46% 60%,#8fb574 61%);overflow:hidden;touch-action:manipulation}
+  .hole:disabled{opacity:1}
+  .mole{position:absolute;left:50%;bottom:-70%;width:64%;margin-left:-32%;font-size:clamp(30px,10vw,46px);line-height:1;transition:bottom .12s ease-out}
+  .pass .mole{font-size:clamp(24px,7vw,34px)}
+  .hole.up .mole{bottom:18%}.hole.hit .mole{bottom:18%;filter:grayscale(1) brightness(1.2);transform:scale(.85)}
+  .hole.hit::after{content:"+1";position:absolute;top:4%;left:0;right:0;font-weight:900;color:#fff;font-size:16px;text-shadow:0 1px 3px rgba(0,0,0,.5)}
+
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section id="lobby"><a class="back" href="../">‹ 返回主页</a><h1>打地鼠</h1><p class="sub">两个人的地鼠一模一样、同时冒出来，<br>30 秒内谁打得多谁赢 🔨</p>
+    <div class="card"><label for="code">房间号（字母或数字）</label><div class="row"><input id="code" maxlength="12" placeholder="比如 love520" autocomplete="off" autocapitalize="off" spellcheck="false"><button id="rand" class="ghost" aria-label="随机房间号">🎲</button></div><button id="join" class="primary block">进入房间</button><div class="divider">或者</div><button id="local" class="ghost block" style="margin-top:6px">先和电脑玩</button><button id="pass" class="ghost block">同一台手机轮流玩</button></div>
+    <p class="hint">地鼠冒头的时间会越来越短。金色的 🌟 一只算 3 只。<br>同一台手机玩时，上下各一块地，各打各的。</p>
+  </section>
+  <section id="game" class="hidden"><div class="topbar"><div id="roomtag" class="roomtag"></div><div class="row" style="gap:6px"><button id="copy" class="ghost small">复制邀请</button><button id="leave" class="ghost small">离开</button></div></div>
+    <div class="seats"><div id="seat0" class="seat"></div><div id="seat1" class="seat"></div></div>
+    <div class="stage"><div id="round" class="eyebrow"></div><div id="status" class="status" role="status" aria-live="polite"></div><div id="count" class="count"></div><div id="fields" class="fields"></div><div id="board"></div></div>
+    <p class="hint" id="caption"></p><button id="again" class="ghost block">重开一局</button><div id="reacts" class="reacts"></div>
+  </section>
+</div>
+<div id="modal" class="modal hidden"><div class="card"><h3 id="mT"></h3><p id="mP"></p><div class="row" id="mBtns"></div></div></div><div id="toast" class="toast"></div>
+<script src="../common.js?v=1794620000"></script>
+<script src="../mqtt.min.js"></script>
+<script src="../rt.js?v=1794620000"></script>
+<script>
+(() => {
+'use strict';
+
+const $=id=>document.getElementById(id),ui=FB.ui,DUR=30000;
+let L=null,k=-1,seed=1,plan=[],sc=[0,0],fin=[null,null],phase='idle',goAt=0,raf=0,sendT=null,cdT=[],botTs=[],finT=null,hitSet=[new Set(),new Set()];
+const pair=()=>L.pair(),mi=()=>pair().indexOf(L.me());
+// The same seed makes the same moles pop up at the same moments on both phones.
+function makePlan(sd){let a=sd>>>0||1;const rnd=()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};
+  const p=[];let t=600,lastHole=-1;while(t<DUR-400){let h;do{h=Math.floor(rnd()*9);}while(h===lastHole);lastHole=h;const life=1100-Math.min(450,t/DUR*450);p.push({t,h,end:t+life,gold:rnd()<0.08});t+=430+rnd()*420;}return p;}
+function seats(){for(let p=0;p<2;p++){const id=pair()[p],e=$('seat'+p),b=document.createElement('b');b.textContent=sc[p]+' 只';e.replaceChildren(document.createTextNode(id?L.nameOf(id):'等 TA 来'),b);}}
+function build(){
+  const box=$('fields');box.replaceChildren();box.className='fields'+(L.mode==='pass'?' pass':'');
+  (L.mode==='pass'?[1,0]:[mi()]).forEach(p=>{if(p<0)return;const f=document.createElement('div');f.className='field'+(L.mode==='pass'&&p===1?' flip':'');f.dataset.p=p;
+    for(let i=0;i<9;i++){const h=document.createElement('button');h.className='hole';h.dataset.i=i;const m=document.createElement('span');m.className='mole';m.textContent='🐹';h.appendChild(m);
+      h.addEventListener('pointerdown',e=>{e.preventDefault();whack(p,i);});f.appendChild(h);}box.appendChild(f);});
+  seats();
+}
+function live(){const now=Date.now()-goAt;return plan.map((m,j)=>[m,j]).filter(([m])=>now>=m.t&&now<m.end);}
+function draw(){
+  const lv=phase==='go'?live():[];
+  document.querySelectorAll('.field').forEach(f=>{const p=+f.dataset.p;[...f.children].forEach((h,i)=>{const on=lv.find(([m])=>m.h===i);const hit=on&&hitSet[p].has(on[1]);
+    h.className='hole'+(on&&!hit?' up':'')+(hit?' hit':'');h.firstChild.textContent=on&&on[0].gold?'🌟':'🐹';});});
+  if(phase==='go'){const left=Math.max(0,Math.ceil((DUR-(Date.now()-goAt))/1000));$('count').textContent=left+'″';if(Date.now()-goAt>=DUR)end();else raf=requestAnimationFrame(draw);}
+}
+function whack(p,i){if(phase!=='go')return;if(L.mode==='online'&&p!==mi())return;const on=live().find(([m])=>m.h===i);if(!on||hitSet[p].has(on[1]))return;hitSet[p].add(on[1]);sc[p]+=on[0].gold?3:1;seats();draw();}
+function status(t){$('status').textContent=t;}
+function start(kk,sd){
+  clear();k=kk;seed=sd;plan=makePlan(sd);sc=[0,0];fin=[null,null];hitSet=[new Set(),new Set()];phase='count';seats();draw();status('');
+  let n=3;$('count').textContent=n;
+  for(let i=1;i<=3;i++)cdT.push(setTimeout(()=>{n--;$('count').textContent=n||'开始！';if(!n){phase='go';goAt=Date.now();status('打冒出来的地鼠，🌟 算 3 只');draw();run();}},i*800));
+}
+function run(){
+  cdT.push(setTimeout(end,DUR+50));
+  if(L.mode==='online')sendT=setInterval(()=>L.emit('s',{k,s:sc[mi()]}),400);
+  if(L.mode==='bot')plan.forEach((m,j)=>{if(Math.random()<0.6)botTs.push(setTimeout(()=>{if(phase==='go'&&!hitSet[1].has(j)){hitSet[1].add(j);sc[1]+=m.gold?3:1;seats();}},m.t+330+Math.random()*(m.end-m.t-380)));});
+}
+function end(){
+  if(phase!=='go')return;phase='done';clearInterval(sendT);botTs.forEach(clearTimeout);cancelAnimationFrame(raf);draw();$('count').textContent='';
+  if(L.mode!=='online'){fin=sc.slice();result();return;}
+  fin[mi()]=sc[mi()];L.emit('fin',{k,s:sc[mi()]});status('时间到！等对方的成绩…');finT=setTimeout(()=>{const o=1-mi();if(fin[o]===null)fin[o]=sc[o];result();},4000);result();
+}
+function result(){
+  if(fin[0]===null||fin[1]===null||phase==='over')return;clearTimeout(finT);phase='over';sc=fin.slice();seats();
+  const w=sc[0]===sc[1]?-1:sc[0]>sc[1]?0:1;status(w<0?sc[0]+' 比 '+sc[1]+'，平手 🤝':L.nameOf(pair()[w])+'打了 '+sc[w]+' 只，赢啦！🎉');if(w>=0)ui.burst('🔨');
+}
+function clear(){clearInterval(sendT);clearTimeout(finT);botTs.forEach(clearTimeout);botTs=[];cdT.forEach(clearTimeout);cdT=[];cancelAnimationFrame(raf);}
+function newRound(){if(!L.both()){status('等 TA 进入同一个房间…');return;}const kk=k+1,sd=1+Math.floor(Math.random()*2147483646);if(L.mode==='online')L.emit('go',{k:kk,seed:sd});start(kk,sd);}
+$('again').textContent='再来一局';
+$('again').onclick=()=>{if(phase==='go'||phase==='count')return;if(L.mode==='online'&&!L.isHost()){L.emit('ask',{});ui.toast('已经喊 TA 开始了');return;}newRound();};
+L=FBLive({key:'mole',name:'打地鼠',
+  start(l){build();if(l.mode!=='online')setTimeout(newRound,600);else status('等 TA 进入同一个房间…');},
+  peers(l){build();draw();if(l.both()&&phase==='idle'&&l.isHost())setTimeout(()=>{if(phase==='idle')newRound();},1200);},
+  event(d,l){
+    if(!pair().includes(d.from))return;const host=pair()[0],p=pair().indexOf(d.from);
+    if(d.t==='go'&&d.from===host&&Number.isInteger(d.k)&&Number.isInteger(d.seed))start(d.k,d.seed);
+    else if(d.t==='s'&&d.k===k&&Number.isInteger(d.s)&&d.s>=0&&d.s<1000){if(phase==='go'||phase==='done'){sc[p]=d.s;seats();}}
+    else if(d.t==='fin'&&d.k===k&&Number.isInteger(d.s)&&d.s>=0&&d.s<1000){fin[p]=d.s;sc[p]=d.s;result();}
+    else if(d.t==='ask'&&l.isHost()&&phase!=='go'&&phase!=='count')newRound();
+  }});
+
+})();
+</script>
+</body>
+</html>

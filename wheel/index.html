@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>幸运转盘 · ForBoring</title>
+<link rel="stylesheet" href="../common.css?v=1794620000">
+<style>
+  .stage{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:16px 12px;text-align:center}
+  .eyebrow{font-size:12px;color:var(--muted);letter-spacing:1px}.status{line-height:1.6;min-height:26px;margin:8px 0 14px}
+  .seats{display:flex;gap:10px;margin:12px 0}.seat{flex:1;min-width:0;padding:10px 8px;border:1.5px solid var(--line);border-radius:14px;background:var(--card);font-size:13px;text-align:center;overflow-wrap:anywhere}.seat.active{background:var(--accent-soft);border-color:var(--accent)}.seat b{display:block;font-size:18px;margin-top:2px}
+  .reacts button{font-size:20px;padding:6px 1px}
+  .wt{font-size:18px;font-weight:800;margin-bottom:8px}
+  .wwrap{position:relative;max-width:330px;margin:0 auto}
+  .wwrap canvas{width:100%;aspect-ratio:1;display:block}
+  .pin{position:absolute;left:50%;top:-4px;width:0;height:0;margin-left:-13px;border-left:13px solid transparent;border-right:13px solid transparent;border-top:24px solid #2b2420;filter:drop-shadow(0 2px 2px rgba(0,0,0,.3))}
+  .res{font-size:22px;font-weight:900;color:var(--accent);min-height:32px;margin:10px 0 4px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin:12px 0 4px}.chips button{padding:6px 11px;font-size:12.5px}
+  .opts{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:10px}
+  .opt{display:flex;align-items:center;gap:4px;background:#f3ebe0;border-radius:16px;padding:5px 6px 5px 11px;font-size:13px}
+  .opt button{background:transparent;padding:0 4px;font-size:14px;color:var(--muted)}
+  .edit{margin-top:10px}.edit input{font-size:15px;letter-spacing:0;text-transform:none;padding:9px 11px}
+
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section id="lobby"><a class="back" href="../">‹ 返回主页</a><h1>幸运转盘</h1><p class="sub">今天谁洗碗？吃什么？看哪部电影？<br>填好选项转一下，两个人看到的是同一个结果 🎡</p>
+    <div class="card"><label for="code">房间号（字母或数字）</label><div class="row"><input id="code" maxlength="12" placeholder="比如 love520" autocomplete="off" autocapitalize="off" spellcheck="false"><button id="rand" class="ghost" aria-label="随机房间号">🎲</button></div><button id="join" class="primary block">进入房间</button><div class="divider">或者</div><button id="local" class="ghost block" style="margin-top:6px">先和电脑玩</button><button id="pass" class="ghost block">同一台手机轮流玩</button></div>
+    <p class="hint">选项可以自己加、自己删，最多 12 个。<br>也可以点上面的模板快速换一组。</p>
+  </section>
+  <section id="game" class="hidden"><div class="topbar"><div id="roomtag" class="roomtag"></div><div class="row" style="gap:6px"><button id="copy" class="ghost small">复制邀请</button><button id="leave" class="ghost small">离开</button></div></div>
+    <div class="seats"><div id="seat0" class="seat"></div><div id="seat1" class="seat"></div></div>
+    <div class="stage"><div id="round" class="eyebrow"></div><div id="status" class="status" role="status" aria-live="polite"></div><div id="wt" class="wt"></div><div class="wwrap"><canvas id="wcv" width="520" height="520"></canvas><div class="pin"></div></div><div id="res" class="res"></div>
+<button id="spin" class="primary block">转！</button><div id="chips" class="chips"></div><div id="opts" class="opts"></div>
+<div class="edit"><div class="row"><input id="newOpt" maxlength="14" placeholder="加一个选项"><button id="add" class="ghost">加</button></div><div class="row" style="margin-top:6px"><input id="title" maxlength="14" placeholder="转盘标题"></div></div></div>
+    <p class="hint" id="caption"></p><button id="again" class="ghost block">重开一局</button><div id="reacts" class="reacts"></div>
+  </section>
+</div>
+<div id="modal" class="modal hidden"><div class="card"><h3 id="mT"></h3><p id="mP"></p><div class="row" id="mBtns"></div></div></div><div id="toast" class="toast"></div>
+<script src="../common.js?v=1794620000"></script>
+<script src="../mqtt.min.js"></script>
+<script src="../rt.js?v=1794620000"></script>
+<script>
+(() => {
+'use strict';
+
+const $=id=>document.getElementById(id),ui=FB.ui,COLORS=['#f6a5b4','#f9d38a','#a8d8b9','#9cc7ef','#c9b4ea','#f7b98b','#b5e0e0','#f2c4de','#d6e39b','#f0a99a','#a9c4f5','#e8d1a8'];
+let L=null,S=null,rot=0,anim=null,shownSpin=0;
+const pair=()=>L.pair();
+const clean=t=>String(t||'').replace(/[\u0000-\u001f<>]/g,'').trim().slice(0,14);
+const PRESETS={'谁洗碗':()=>[L.nameOf(pair()[0]||'me').replace(/^你$/,FB.name()),pair()[1]?L.nameOf(pair()[1]):'TA'],'吃什么':()=>['火锅','寿司','烧烤','麻辣烫','炸鸡','拉面','披萨','随便'],
+  '看什么':()=>['爱情片','喜剧片','恐怖片','动画片','纪录片','综艺'],'谁请客':()=>[pair()[0]?L.nameOf(pair()[0]).replace(/^你$/,FB.name()):'我',pair()[1]?L.nameOf(pair()[1]):'TA','AA'],
+  '小惩罚':()=>['唱一首歌','做 10 个深蹲','发一张可爱自拍','讲个冷笑话','夸对方 3 句','这次放过你']};
+const blank=()=>({v:0,title:'吃什么',opts:PRESETS['吃什么'](),spin:{n:0,idx:-1,turns:5,j:0}});
+function ok(s){return s&&Number.isSafeInteger(s.v)&&typeof s.title==='string'&&Array.isArray(s.opts)&&s.opts.length>=2&&s.opts.length<=12&&s.opts.every(o=>typeof o==='string')&&s.spin&&Number.isInteger(s.spin.n)&&Number.isInteger(s.spin.idx)&&s.spin.idx<s.opts.length;}
+function set(ch){const n=Object.assign(JSON.parse(JSON.stringify(S)),ch);n.v=S.v+1;S=n;if(L.mode==='online')L.net.setState(S);render();}
+const canAct=()=>L.mode!=='online'||L.both();
+function wheel(){
+  const cv=$('wcv'),c=cv.getContext('2d'),W=cv.width,R=W/2-6,n=S.opts.length,seg=Math.PI*2/n;c.clearRect(0,0,W,W);
+  c.save();c.translate(W/2,W/2);c.rotate(rot);
+  for(let i=0;i<n;i++){const a0=-Math.PI/2+i*seg;c.beginPath();c.moveTo(0,0);c.arc(0,0,R,a0,a0+seg);c.closePath();c.fillStyle=COLORS[i%COLORS.length];c.fill();c.strokeStyle='#fff';c.lineWidth=3;c.stroke();
+    c.save();c.rotate(a0+seg/2);c.fillStyle='#3a2f28';c.font='700 '+(n>8?15:18)+'px -apple-system,PingFang SC,sans-serif';c.textAlign='right';c.textBaseline='middle';c.fillText(S.opts[i],R-14,0);c.restore();}
+  c.beginPath();c.arc(0,0,22,0,Math.PI*2);c.fillStyle='#fff';c.fill();c.strokeStyle='#e7dccf';c.lineWidth=3;c.stroke();c.restore();
+}
+function target(sp){const n=S.opts.length,seg=Math.PI*2/n;return sp.turns*Math.PI*2+(Math.PI*2-(sp.idx+0.5+sp.j)*seg);}
+function play(sp){
+  cancelAnimationFrame(anim);const from=rot%(Math.PI*2),to=target(sp),t0=performance.now(),D=3800;$('res').textContent='';
+  const f=t=>{const k=Math.min(1,(t-t0)/D),e=1-Math.pow(1-k,4);rot=from+(to-from)*e;wheel();if(k<1)anim=requestAnimationFrame(f);else{rot=to%(Math.PI*2);$('res').textContent='👉 '+S.opts[sp.idx];ui.burst('🎉');}};anim=requestAnimationFrame(f);
+}
+function render(){
+  if(!S)return;
+  for(let p=0;p<2;p++){const id=pair()[p],e=$('seat'+p);e.replaceChildren(document.createTextNode(id?L.nameOf(id):'等 TA 来'));}
+  $('wt').textContent=S.title;$('title').value===''&&($('title').placeholder='转盘标题：'+S.title);
+  $('status').textContent=canAct()?'谁都可以转，两边会看到同一个结果':'等 TA 进入同一个房间…';$('spin').disabled=!canAct()||S.opts.length<2;
+  const o=$('opts');o.replaceChildren();S.opts.forEach((t,i)=>{const d=document.createElement('span');d.className='opt';d.textContent=t;const x=document.createElement('button');x.textContent='×';x.title='删掉';x.onclick=()=>{if(S.opts.length<=2){ui.toast('至少要两个选项');return;}const opts=S.opts.filter((_,j)=>j!==i);set({opts,spin:{n:S.spin.n,idx:-1,turns:5,j:0}});};d.appendChild(x);o.appendChild(d);});
+  if(S.spin.n!==shownSpin&&S.spin.idx>=0){shownSpin=S.spin.n;play(S.spin);}else if(!anim||S.spin.idx<0){wheel();}
+}
+$('spin').onclick=()=>{if(!canAct()||S.opts.length<2)return;set({spin:{n:S.spin.n+1,idx:Math.floor(Math.random()*S.opts.length),turns:5+Math.floor(Math.random()*3),j:Math.round((Math.random()-.5)*60)/100}});};
+$('add').onclick=()=>{const t=clean($('newOpt').value);if(!t)return;if(S.opts.length>=12){ui.toast('最多 12 个选项');return;}set({opts:S.opts.concat(t),spin:{n:S.spin.n,idx:-1,turns:5,j:0}});$('newOpt').value='';};
+$('newOpt').addEventListener('keydown',e=>{if(e.key==='Enter')$('add').click();});
+$('title').addEventListener('change',()=>{const t=clean($('title').value);if(t)set({title:t});$('title').value='';});
+const ch=$('chips');Object.keys(PRESETS).forEach(k=>{const b=document.createElement('button');b.className='ghost';b.textContent=k;b.onclick=()=>{if(canAct())set({title:k,opts:PRESETS[k]().map(clean),spin:{n:S.spin.n,idx:-1,turns:5,j:0}});};ch.appendChild(b);});
+$('again').textContent='换回默认的“吃什么”';$('again').onclick=()=>set({title:'吃什么',opts:PRESETS['吃什么'](),spin:{n:S.spin.n,idx:-1,turns:5,j:0}});
+L=FBLive({key:'wheel',name:'幸运转盘',localLabel:false,passLabel:'自己用',
+  start(l){if(!S)S=blank();shownSpin=S.spin.n;if(l.mode==='online')setTimeout(()=>{if(S.v===0&&l.isHost()&&l.both())l.net.setState(S);render();},1500);render();},
+  peers(l){render();},
+  state(s,l){if(!ok(s)||(S&&s.v<=S.v&&S.v>0))return;S=JSON.parse(JSON.stringify(s));S.title=clean(S.title)||'转盘';S.opts=S.opts.map(clean).map(x=>x||'？');render();}
+});
+
+})();
+</script>
+</body>
+</html>

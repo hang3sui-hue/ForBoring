@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>终极井字棋 · ForBoring</title>
+<link rel="stylesheet" href="../common.css?v=1794620000">
+<style>
+  .stage{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:16px 12px;text-align:center}
+  .eyebrow{font-size:12px;color:var(--muted);letter-spacing:1px}.status{line-height:1.6;min-height:26px;margin:8px 0 14px}
+  .seats{display:flex;gap:10px;margin:12px 0}.seat{flex:1;min-width:0;padding:10px 8px;border:1.5px solid var(--line);border-radius:14px;background:var(--card);font-size:13px;text-align:center;overflow-wrap:anywhere}.seat.active{background:var(--accent-soft);border-color:var(--accent)}.seat b{display:block;font-size:18px;margin-top:2px}
+  .reacts button{font-size:20px;padding:6px 1px}
+  .big{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;max-width:390px;margin:0 auto;background:#5b4e44;padding:7px;border-radius:14px}
+  .small{position:relative;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px;background:#efe5d8;padding:4px;border-radius:9px;transition:box-shadow .2s,background .2s}
+  .small.live{background:#fbe3e7;box-shadow:0 0 0 3px var(--accent)}
+  .c{aspect-ratio:1;min-width:0;padding:0;border:none;border-radius:5px;background:#fffdf9;font-size:clamp(13px,4.2vw,20px);font-weight:800;line-height:1;display:flex;align-items:center;justify-content:center}
+  .c:disabled{opacity:1;cursor:default}.c.ok:hover{background:var(--accent-soft)}.c.x{color:var(--accent)}.c.o{color:#3f86c9}.c.last{box-shadow:inset 0 0 0 2px #c9b8a6}
+  .won{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:clamp(46px,16vw,84px);font-weight:900;border-radius:9px;background:rgba(255,253,249,.78)}.won.x{color:var(--accent)}.won.o{color:#3f86c9}.won.d{color:#b5a799;font-size:clamp(26px,8vw,40px)}
+  .seat i{font-style:normal;font-weight:900;font-size:18px;margin-right:4px}.seat .x{color:var(--accent)}.seat .o{color:#3f86c9}
+
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section id="lobby"><a class="back" href="../">‹ 返回主页</a><h1>终极井字棋</h1><p class="sub">九个井字棋拼成一个大井字棋。<br>你下在小格子的哪个位置，TA 就得去大棋盘对应的那一盘下 #️⃣</p>
+    <div class="card"><label for="code">房间号（字母或数字）</label><div class="row"><input id="code" maxlength="12" placeholder="比如 love520" autocomplete="off" autocapitalize="off" spellcheck="false"><button id="rand" class="ghost" aria-label="随机房间号">🎲</button></div><button id="join" class="primary block">进入房间</button><div class="divider">或者</div><button id="local" class="ghost block" style="margin-top:6px">先和电脑玩</button><button id="pass" class="ghost block">同一台手机轮流玩</button></div>
+    <p class="hint">赢下一个小棋盘，就在大棋盘上占一格；在大棋盘上连成三个就赢。<br>如果被送去的小棋盘已经结束了，可以任选一盘下。</p>
+  </section>
+  <section id="game" class="hidden"><div class="topbar"><div id="roomtag" class="roomtag"></div><div class="row" style="gap:6px"><button id="copy" class="ghost small">复制邀请</button><button id="leave" class="ghost small">离开</button></div></div>
+    <div class="seats"><div id="seat0" class="seat"></div><div id="seat1" class="seat"></div></div>
+    <div class="stage"><div id="round" class="eyebrow"></div><div id="status" class="status" role="status" aria-live="polite"></div><div id="board" class="big" aria-label="终极井字棋棋盘"></div></div>
+    <p class="hint" id="caption">粉色框是这一步能下的小棋盘。</p><button id="again" class="ghost block">重开一局</button><div id="reacts" class="reacts"></div>
+  </section>
+</div>
+<div id="modal" class="modal hidden"><div class="card"><h3 id="mT"></h3><p id="mP"></p><div class="row" id="mBtns"></div></div></div><div id="toast" class="toast"></div>
+<script src="../common.js?v=1794620000"></script>
+<script src="../mqtt.min.js"></script>
+<script src="../turn.js?v=1794620000"></script>
+<script>
+(() => {
+'use strict';
+
+const $=id=>document.getElementById(id);
+const L=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+const line=a=>{for(const [x,y,z] of L)if(a[x]&&a[x]<3&&a[x]===a[y]&&a[x]===a[z])return a[x];return 0;};
+function legalOf(cells,small,forced){const r=[];for(let b=0;b<9;b++){if(small[b]||(forced>=0&&b!==forced))continue;for(let i=0;i<9;i++)if(!cells[b*9+i])r.push(b*9+i);}return r;}
+function step(P,m,mark){P.cells[m]=mark;const b=Math.floor(m/9),loc=P.cells.slice(b*9,b*9+9);const w=line(loc);if(w)P.small[b]=w;else if(loc.every(x=>x))P.small[b]=3;
+  const nb=m%9;P.forced=P.small[nb]?-1:nb;P.big=line(P.small);}
+function replay(s){
+  const P={cells:Array(81).fill(0),small:Array(9).fill(0),forced:-1,big:0,last:-1},first=s.game%2;let turn=first;
+  for(const m of s.moves){if(P.big||!legalOf(P.cells,P.small,P.forced).includes(m))return null;step(P,m,turn===first?1:2);P.last=m;turn=1-turn;}
+  P.turn=turn;P.first=first;P.legal=P.big?[]:legalOf(P.cells,P.small,P.forced);P.done=!!P.big||!P.legal.length;
+  P.winner=!P.done?null:P.big?(P.big===1?first:1-first):-1;return P;
+}
+// Computer: try each legal move and play quick random games from there; keep the move that wins most.
+function bot(pos){
+  const me=pos.turn===pos.first?1:2;let best=-1,pick=pos.legal[0];
+  const n=Math.max(12,Math.floor(2400/pos.legal.length));
+  for(const m of pos.legal){
+    let score=0;
+    for(let k=0;k<n;k++){
+      const P={cells:pos.cells.slice(),small:pos.small.slice(),forced:pos.forced,big:0};let mark=me;step(P,m,mark);
+      while(!P.big){const lg=legalOf(P.cells,P.small,P.forced);if(!lg.length)break;mark=3-mark;step(P,lg[Math.floor(Math.random()*lg.length)],mark);}
+      score+=P.big===me?1:P.big?0:0.4;
+    }
+    if(score>best){best=score;pick=m;}
+  }
+  return pick;
+}
+let PLAY=null;const G=FBTurn({key:'uttt',name:'终极井字棋',maxMoves:81,replay,bot,botDelay:500,
+  seat(p,c){const {st,pos,nameOf}=c,x=st?(st.game%2===p):p===0,i=document.createElement('i');i.className=x?'x':'o';i.textContent=x?'×':'○';
+    return [i,st?nameOf(st.players[p])+(x?' · 先手':''):(p?'等 TA 来':'先手玩家')];},
+  turnText(c){const {pos,can,mode,nameOf,st}=c;const where=pos.forced<0?'可以下在任意一个亮着的小棋盘':'只能下在亮着的那个小棋盘';
+    return can?'轮到'+(mode==='pass'?nameOf(st.players[pos.turn]):'你')+'，'+where:nameOf(st.players[pos.turn])+'正在想…';},
+  doneText(c){const {pos,st,nameOf}=c;return pos.winner<0?'大棋盘没人连成三个，平手 🤝':nameOf(st.players[pos.winner])+'在大棋盘上连成三个，赢啦！🎉';},
+  draw(c){
+    PLAY=c.play;const {pos,can,st}=c,box=$('board');box.replaceChildren();const ok=new Set(can?pos.legal:[]);
+    for(let b=0;b<9;b++){
+      const sm=document.createElement('div');sm.className='small'+(!pos.done&&!pos.small[b]&&(pos.forced<0||pos.forced===b)?' live':'');
+      for(let i=0;i<9;i++){const k=b*9+i,v=pos.cells[k],e=document.createElement('button');e.className='c'+(v===1?' x':v===2?' o':'')+(ok.has(k)?' ok':'')+(pos.last===k?' last':'');e.textContent=v===1?'×':v===2?'○':'';e.disabled=!ok.has(k);e.dataset.k=k;e.setAttribute('aria-label','第 '+(b+1)+' 盘第 '+(i+1)+' 格');sm.appendChild(e);}
+      if(pos.small[b]){const w=document.createElement('div');w.className='won '+(pos.small[b]===1?'x':pos.small[b]===2?'o':'d');w.textContent=pos.small[b]===1?'×':pos.small[b]===2?'○':'平';sm.appendChild(w);}
+      box.appendChild(sm);
+    }
+  }});
+$('board').onclick=e=>{const b=e.target.closest('button.c');if(b&&!b.disabled)PLAY&&PLAY(+b.dataset.k);};
+
+})();
+</script>
+</body>
+</html>
