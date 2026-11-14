@@ -77,6 +77,11 @@
   .empty{font-size:13px;color:var(--muted);text-align:center;padding:10px 0 2px}
   #match.seeking{background:var(--ink)}
   .backhome{font-size:12px;color:var(--accent);background:none;padding:0;margin-top:10px}
+  .game-option{background:var(--card);border:1.5px solid var(--line);border-radius:18px}
+  .game-option .game{border:0;background:transparent}
+  .play-modes{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 14px 12px}
+  .play-modes a{display:block;text-align:center;text-decoration:none;padding:9px 6px;border-radius:10px;font-size:13px;background:#efe5d8;color:var(--ink)}
+  .play-modes .duo-link{background:var(--accent-soft);color:var(--accent)}
 </style>
 </head>
 <body>
@@ -127,7 +132,10 @@
     <a class="game" data-g="quoridor" href="quoridor/"><div class="ic">🚧</div><div><div class="nm">步步为营</div><div class="ds">走一步，还是放堵墙挡 TA？先到对面赢</div></div></a>
     <a class="game" data-g="jungle" href="jungle/"><div class="ic">🐘</div><div><div class="nm">斗兽棋</div><div class="ds">象吃狮、狮吃虎、鼠吃象 · 钻进兽穴就赢</div></div></a>
     <a class="game" data-g="checkers" href="checkers/"><div class="ic">🔷</div><div><div class="nm">中国跳棋</div><div class="ds">隔子连跳 · 先把棋子全挪到对面的赢</div></div></a>
+    <div class="game-option">
     <a class="game" data-g="memory" href="memory/"><div class="ic">🃏</div><div><div class="nm">翻牌配对</div><div class="ds">翻两张一样就收走 · 比谁记性好</div></div></a>
+      <div class="play-modes"><a class="solo-link" href="memory/?solo=1">单人玩</a><a class="duo-link" data-g="memory" href="memory/">双人联机</a></div>
+    </div>
   </div>
 
   <div class="sec">🎲 运气和心理战<span class="secsub">猜、赌、虚张声势</span></div>
@@ -141,13 +149,28 @@
 
   <div class="sec">⚡ 拼手速的<span class="secsub">手快有，手慢无</span></div>
   <div class="grid">
+    <div class="game-option">
     <a class="game" data-g="typing" href="typing/"><div class="ic">⌨️</div><div><div class="nm">打字比赛</div><div class="ds">同一段话一起打 · 实时看到对方进度</div></div></a>
-    <a class="game" data-g="jenga" href="jenga/"><div class="ic">🧱</div><div><div class="nm">抽积木</div><div class="ds">按住慢慢抽，塔会晃 · 谁弄倒谁输</div></div></a>
-    <a class="game" data-g="g2048" href="g2048/"><div class="ic">🔢</div><div><div class="nm">2048</div><div class="ds">同一个开局同时玩 · 3 分钟比分数</div></div></a>
-    <a class="game" data-g="reaction" href="reaction/"><div class="ic">🚦</div><div><div class="nm">反应力测试</div><div class="ds">变绿的一瞬间谁先按 · 抢跑直接输</div></div></a>
+      <div class="play-modes"><a class="solo-link" href="typing/?solo=1">单人玩</a><a class="duo-link" data-g="typing" href="typing/">双人联机</a></div>
+    </div>
+    <div class="game-option">
+    <a class="game" data-g="jenga" href="jenga/"><div class="ic">🧱</div><div><div class="nm">抽积木</div><div class="ds">单人挑战抽几块 · 联机轮流抽</div></div></a>
+      <div class="play-modes"><a class="solo-link" href="jenga/?solo=1">单人玩</a><a class="duo-link" data-g="jenga" href="jenga/">双人联机</a></div>
+    </div>
+    <div class="game-option">
+    <a class="game" data-g="g2048" href="g2048/"><div class="ic">🔢</div><div><div class="nm">2048</div><div class="ds">单人不限时合到 2048 · 联机 3 分钟比分数</div></div></a>
+      <div class="play-modes"><a class="solo-link" href="g2048/?solo=1">单人玩</a><a class="duo-link" data-g="g2048" href="g2048/">双人联机</a></div>
+    </div>
+    <div class="game-option">
+    <a class="game" data-g="reaction" href="reaction/"><div class="ic">🚦</div><div><div class="nm">反应力测试</div><div class="ds">单人测反应时间 · 联机比手速</div></div></a>
+      <div class="play-modes"><a class="solo-link" href="reaction/?solo=1">单人玩</a><a class="duo-link" data-g="reaction" href="reaction/">双人联机</a></div>
+    </div>
     <a class="game" data-g="tron" href="tron/"><div class="ic">🏍️</div><div><div class="nm">光速摩托</div><div class="ds">边跑边留墙 · 谁先撞上谁输</div></div></a>
     <a class="game" data-g="tug" href="tug/"><div class="ic">🪢</div><div><div class="nm">拔河</div><div class="ds">两个人一起狂点 · 把绳子拉过来就赢</div></div></a>
-    <a class="game" data-g="mole" href="mole/"><div class="ic">🔨</div><div><div class="nm">打地鼠</div><div class="ds">同一批地鼠一起冒 · 30 秒比谁打得多</div></div></a>
+    <div class="game-option">
+    <a class="game" data-g="mole" href="mole/"><div class="ic">🔨</div><div><div class="nm">打地鼠</div><div class="ds">单人冲纪录 · 联机比谁打得多</div></div></a>
+      <div class="play-modes"><a class="solo-link" href="mole/?solo=1">单人玩</a><a class="duo-link" data-g="mole" href="mole/">双人联机</a></div>
+    </div>
   </div>
 
   <div class="sec">💕 情侣向<span class="secsub">玩着玩着就聊起来了</span></div>
@@ -190,7 +213,7 @@
   function useRoom(r){
     r=FB.setRoom(r); $('room').value=r;
     try{ history.replaceState(null,'','#'+r); }catch(_){}
-    document.querySelectorAll('a.game[data-g]').forEach(a=>a.href=a.dataset.g+'/#'+r);
+    document.querySelectorAll('a.game[data-g],a.duo-link[data-g]').forEach(a=>a.href=a.dataset.g+'/#'+r);
     $('pub').checked=FB.isPublic(r);
     const home=FB.homeRoom(); $('backHome').classList.toggle('hidden', r===home); $('backHome').textContent='← 回到我自己的房间 '+home;
     if(r!==code) connect(r); else beat();
@@ -312,7 +335,7 @@
   }
 
   // ---- pick a game: invite whoever is here ----
-  document.querySelectorAll('a.game[data-g]').forEach(a=>a.addEventListener('click',e=>{
+  document.querySelectorAll('a.game[data-g],a.duo-link[data-g]').forEach(a=>a.addEventListener('click',e=>{
     if(client&&conn&&alive().length){
       e.preventDefault();
       client.publish(base+'/e', JSON.stringify({t:'go', g:a.dataset.g, n:FB.name(), from:myId}), {qos:1});

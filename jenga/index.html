@@ -36,16 +36,16 @@
   <section id="lobby">
     <a class="back" href="../">‹ 返回主页</a>
     <h1>抽积木</h1>
-    <p class="sub">轮流从塔里抽一块积木放到最上面。按住慢慢抽，塔会晃……谁把塔弄倒谁输 🧱</p>
+    <p class="sub">单人挑战能抽出多少块，也能和 TA 联机轮流抽。按住慢慢抽，塔会晃……小心别弄倒 🧱</p>
     <div class="card">
       <label for="code">房间号（字母或数字）</label>
       <div class="row">
         <input id="code" maxlength="12" placeholder="比如 love520" autocomplete="off" autocapitalize="off" spellcheck="false">
         <button id="rand" class="ghost">🎲</button>
       </div>
-      <button id="join" class="primary block">进入房间</button>
+      <button id="join" class="primary block">双人联机 · 进入房间</button>
       <div class="divider">或者</div>
-      <button id="local" class="ghost block" style="margin-top:6px">同一台手机轮流玩</button>
+      <button id="local" class="ghost block" style="margin-top:6px">单人玩</button>
     </div>
   </section>
 
@@ -87,10 +87,10 @@
   let remote={p:0,w:0,at:0};                          // partner's live pull
   let collapsedKey='', lastFrame=0;
 
-  const ME=()=> mode==='local' ? turnId() : net.myId;
-  const turnId=()=> st ? st.players[(st.game+st.moves)%2] : null;
-  const nameOf=id=> mode==='local' ? (id==='p1'?'玩家 1':'玩家 2') : (id===net.myId?'你':net.nameOf(id));
-  const myTurn=()=> st && !st.loser && (mode==='local' || turnId()===net.myId);
+  const ME=()=> mode==='solo' ? turnId() : net.myId;
+  const turnId=()=> st ? st.players[(st.game+st.moves)%st.players.length] : null;
+  const nameOf=id=> mode==='solo' ? '你' : (id===net.myId?'你':net.nameOf(id));
+  const myTurn=()=> st && !st.loser && (mode==='solo' || turnId()===net.myId);
 
   // ---------- state ----------
   function fresh(game, players){
@@ -98,7 +98,7 @@
     return { game, v:0, tower, moves:0, players, loser:null, seed:0 };
   }
   function valid(s){
-    if(!s||!Number.isInteger(s.game)||!Number.isInteger(s.v)||!Number.isInteger(s.moves)||!Array.isArray(s.tower)||s.tower.length>80||!Array.isArray(s.players)||s.players.length!==2) return false;
+    if(!s||!Number.isInteger(s.game)||!Number.isInteger(s.v)||!Number.isInteger(s.moves)||!Array.isArray(s.tower)||s.tower.length>80||!Array.isArray(s.players)||s.players.length!==(mode==='solo'?1:2)) return false;
     return s.tower.every(l=>Array.isArray(l)&&l.length===3&&l.every(x=>Number.isInteger(x)&&x>=-1&&x<54));
   }
   const newer=s=>!st||s.game>st.game||(s.game===st.game&&s.v>st.v);
@@ -164,12 +164,12 @@
 
   // ---------- render ----------
   function render(){
-    ui.roomTag(mode==='online'?net:null, code, '同一台手机轮流玩');
+    ui.roomTag(mode==='online'?net:null, code, '单人挑战');
     $('copy').classList.toggle('hidden', mode!=='online'); $('reacts').classList.toggle('hidden', mode!=='online');
     const s=$('status'); s.className='status';
     if(!st){ s.textContent = mode==='online'&&!net.connected() ? '连接中…' : '等待 TA 输入房间号 '+code+' 进来…'; $('pull').disabled=true; return; }
     if(st.loser) s.textContent = nameOf(st.loser)+' 把塔弄倒了 💥';
-    else if(myTurn()){ s.textContent = mode==='local' ? '轮到 '+nameOf(turnId())+' 抽' : '轮到你抽！'; s.className='status go'; }
+    else if(myTurn()){ s.textContent = mode==='solo' ? '继续挑战，看看能抽出多少块！' : '轮到你抽！'; s.className='status go'; }
     else s.textContent = '等 '+nameOf(turnId())+' 抽…';
     blocks.forEach((b,k)=>{ const [l,i]=k.split(',').map(Number); b.classList.toggle('sel', !!sel&&sel[0]===l&&sel[1]===i); b.classList.toggle('rsel', !!rsel&&rsel[0]===l&&rsel[1]===i && !myTurn()); });
     const can=myTurn() && !!sel && !busy;
@@ -237,15 +237,16 @@
     });
     $('tower').style.transform='';
     setTimeout(()=>{
+      if(!st||st.game+':'+st.v!==key||!st.loser)return;
       const meLost = mode==='online' && st.loser===net.myId;
-      const title = mode==='local' ? nameOf(st.loser)+' 把塔弄倒了！' : (meLost ? '塔被你弄倒了 💥' : nameOf(st.loser)+' 把塔弄倒了！');
+      const title = mode==='solo' ? '塔倒啦，挑战结束 💥' : (meLost ? '塔被你弄倒了 💥' : nameOf(st.loser)+' 把塔弄倒了！');
       ui.modal(title, '一共抽了 '+st.moves+' 块', [{label:'看看'},{label:'再来一局',primary:true,fn:restart}]);
       if(mode==='online' && !meLost) ui.burst('😂');
     }, 1700);
   }
   function restart(){
-    const players = mode==='local' ? ['p1','p2'] : net.order();
-    if(players.length<2){ ui.toast('等 TA 进来再开'); return; }
+    const players = mode==='solo' ? ['me'] : net.order();
+    if(mode==='online'&&players.length<2){ ui.toast('等 TA 进来再开'); return; }
     busy=false; collapsedKey=''; commit(fresh((st?st.game:-1)+1, players));
   }
 
@@ -281,6 +282,8 @@
   ui.reacts(()=>net, 9, i=>{ seq.push(i); if(seq.length>7) seq.shift(); if(seq.join('')==='0014785'){ seq=[]; xray=!xray; } });
 
   function show(){ $('lobby').classList.add('hidden'); $('game').classList.remove('hidden'); }
+  function startSolo(){mode='solo';code='';show();restart();}
+  if(new URLSearchParams(location.search).get('solo')==='1'){startSolo();return;}
   ui.lobby({
     onJoin(c){
       mode='online'; code=c; show();
@@ -309,7 +312,7 @@
       });
       render();
     },
-    onLocal(){ mode='local'; code=''; show(); restart(); }
+    onLocal: startSolo
   });
 })();
 </script>

@@ -48,7 +48,7 @@
         <input id="code" maxlength="12" placeholder="比如 love520" autocomplete="off" autocapitalize="off" spellcheck="false">
         <button id="rand" class="ghost">🎲</button>
       </div>
-      <button id="join" class="primary block">进入房间</button>
+      <button id="join" class="primary block">双人联机 · 进入房间</button>
       <div class="divider">或者</div>
       <button id="local" class="ghost block" style="margin-top:6px">自己练习</button>
     </div>
@@ -226,6 +226,7 @@
   ui.reacts(()=>net, 9, i=>{ seq.push(i); if(seq.length>7) seq.shift(); if(seq.join('')==='0014785'){ seq=[]; xray=!xray; } });
 
   function show(){ $('lobby').classList.add('hidden'); $('game').classList.remove('hidden'); }
+  if(new URLSearchParams(location.search).get('solo')==='1'){mode='solo';code='';show();newRound(2);return;}
   ui.lobby({
     onJoin(c){
       mode='online'; code=c; show();

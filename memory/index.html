@@ -26,14 +26,14 @@
 </head>
 <body>
 <div class="wrap">
-  <section id="lobby"><a class="back" href="../">‹ 返回主页</a><h1>翻牌配对</h1><p class="sub">轮流翻两张牌，一样就收走，还能接着翻。<br>记性好的人赢 🧠</p>
-    <div class="card"><label for="code">房间号（字母或数字）</label><div class="row"><input id="code" maxlength="12" placeholder="比如 love520" autocomplete="off" autocapitalize="off" spellcheck="false"><button id="rand" class="ghost" aria-label="随机房间号">🎲</button></div><button id="join" class="primary block">进入房间</button><div class="divider">或者</div><button id="local" class="ghost block" style="margin-top:6px">先和电脑玩</button><button id="pass" class="ghost block">同一台手机轮流玩</button></div>
-    <p class="hint">16 张牌，8 对。翻错的两张会一直亮着，直到下一个人翻牌。<br>记住它们在哪！</p>
+  <section id="lobby"><a class="back" href="../">‹ 返回主页</a><h1>翻牌配对</h1><p class="sub">一个人找齐 8 对，或和 TA 联机比记性。<br>联机轮流翻牌，配对成功还能接着翻 🧠</p>
+    <div class="card"><label for="code">房间号（字母或数字）</label><div class="row"><input id="code" maxlength="12" placeholder="比如 love520" autocomplete="off" autocapitalize="off" spellcheck="false"><button id="rand" class="ghost" aria-label="随机房间号">🎲</button></div><button id="join" class="primary block">双人联机 · 进入房间</button><div class="divider">或者</div><button id="local" class="ghost block" style="margin-top:6px">单人玩</button></div>
+    <p class="hint">16 张牌，8 对。翻错的两张会一直亮着，直到下一次翻牌。<br>记住它们在哪！</p>
   </section>
   <section id="game" class="hidden"><div class="topbar"><div id="roomtag" class="roomtag"></div><div class="row" style="gap:6px"><button id="copy" class="ghost small">复制邀请</button><button id="leave" class="ghost small">离开</button></div></div>
     <div class="seats"><div id="seat0" class="seat"></div><div id="seat1" class="seat"></div></div>
     <div class="stage"><div id="round" class="eyebrow"></div><div id="status" class="status" role="status" aria-live="polite"></div><div id="board" class="board" aria-label="翻牌区"></div></div>
-    <p class="hint">配对成功的牌会变淡，边框颜色是谁收走的。</p><button id="again" class="ghost block">重开一局</button><div id="reacts" class="reacts"></div>
+    <p class="hint" id="caption">配对成功的牌会变淡，边框颜色是谁收走的。</p><button id="again" class="ghost block">重开一局</button><div id="reacts" class="reacts"></div>
   </section>
 </div>
 <div id="modal" class="modal hidden"><div class="card"><h3 id="mT"></h3><p id="mP"></p><div class="row" id="mBtns"></div></div></div><div id="toast" class="toast"></div>
@@ -47,30 +47,27 @@
   // Same seed gives the same shuffled deck on both phones.
   function deck(seed){let a=seed>>>0||1;const rnd=()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};
     const set=SETS[seed%SETS.length],d=set.concat(set);for(let i=d.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[d[i],d[j]]=[d[j],d[i]];}return d;}
-  let mode=null,net=null,code='',st=null,pos=null,ready=false,initT=null,botT=null,celebrated='',mem=new Map();
+  let mode=null,net=null,code='',st=null,pos=null,ready=false,initT=null,celebrated='';
   const me=()=>mode==='online'?net.myId:'me';
-  const nameOf=id=>mode==='pass'?(id==='me'?'一号玩家':'二号玩家'):id==='bot'?'电脑':id===me()?'你':net.nameOf(id);
+  const nameOf=id=>id===me()?'你':net.nameOf(id);
   const newer=s=>!st||s.game>st.game||(s.game===st.game&&s.v>st.v);
   function replay(s){
-    const d=deck(s.seed),own=Array(TOTAL).fill(-1);let turn=s.game%2,open=-1,miss=[],lastHit=false;
+    const solo=s.players.length===1,d=deck(s.seed),own=Array(TOTAL).fill(-1);let turn=solo?0:s.game%2,open=-1,miss=[],lastHit=false;
     for(const m of s.moves){
       if(!Number.isInteger(m)||m<0||m>=TOTAL||own[m]>=0||m===open)return null;
       if(open<0){open=m;miss=[];lastHit=false;}
-      else{if(d[open]===d[m]){own[open]=own[m]=turn;lastHit=true;}else{miss=[open,m];turn=1-turn;lastHit=false;}open=-1;}
+      else{if(d[open]===d[m]){own[open]=own[m]=turn;lastHit=true;}else{miss=[open,m];turn=solo?0:1-turn;lastHit=false;}open=-1;}
     }
     const cnt=[own.filter(x=>x===0).length/2,own.filter(x=>x===1).length/2],done=own.every(x=>x>=0);
     return {d,own,turn,open,miss,lastHit,cnt,done,winner:done?(cnt[0]===cnt[1]?-1:cnt[0]>cnt[1]?0:1):null};
   }
-  function valid(s){return !!(s&&Number.isSafeInteger(s.game)&&s.game>=0&&s.game<=1e9&&Number.isSafeInteger(s.seed)&&s.seed>0&&s.seed<2**31&&Number.isSafeInteger(s.v)&&Array.isArray(s.moves)&&s.moves.length<=1000&&s.v===s.moves.length&&Array.isArray(s.players)&&s.players.length===2&&s.players[0]!==s.players[1]&&s.players.every(id=>typeof id==='string'&&/^[a-z0-9]{1,16}$/.test(id))&&replay(s));}
+  function valid(s){return !!(s&&Number.isSafeInteger(s.game)&&s.game>=0&&s.game<=1e9&&Number.isSafeInteger(s.seed)&&s.seed>0&&s.seed<2**31&&Number.isSafeInteger(s.v)&&Array.isArray(s.moves)&&s.moves.length<=1000&&s.v===s.moves.length&&Array.isArray(s.players)&&s.players.length===(mode==='solo'?1:2)&&s.players[0]!==s.players[1]&&s.players.every(id=>typeof id==='string'&&/^[a-z0-9]{1,16}$/.test(id))&&replay(s));}
   const compatible=s=>!st||s.game>st.game||(s.seed===st.seed&&s.players.join('|')===st.players.join('|')&&st.moves.every((x,i)=>s.moves[i]===x));
   const seatsHere=()=>mode!=='online'||(ready&&net.connected()&&st&&st.players.every(id=>id===me()||net.alive().includes(id)));
   function accept(s,send){
     if(!valid(s)||!newer(s)||!compatible(s))return;
     const old=st;st={game:s.game,v:s.v,seed:s.seed,players:s.players.slice(),moves:s.moves.slice()};pos=replay(st);
-    if(!old||old.game!==st.game){ui.close();mem=new Map();}
-    clearTimeout(botT);botT=null;
-    // the bot remembers most cards it has seen, but not all of them
-    st.moves.forEach(i=>{if(!mem.has(i))mem.set(i,Math.random()<0.7);});
+    if(!old||old.game!==st.game)ui.close();
     render();if(send&&mode==='online')net.setState(st);afterChange();
   }
   function flip(i,by){
@@ -83,33 +80,26 @@
       if(st){if(!st.players.includes(me())||!seatsHere()){ui.toast('等两位玩家都在线再开');return;}if(me()!==st.players[0]){net.emit('restart',{game:st.game});return;}}
       else if(net.order().length!==2||net.order()[0]!==me())return;
     }
-    accept({game:st?st.game+1:0,v:0,seed:1+Math.floor(Math.random()*(2**31-2)),players:st?st.players.slice():mode==='online'?net.order():['me',mode==='bot'?'bot':'p2'],moves:[]},true);
-  }
-  function botPick(){
-    const known=new Map(),free=[];
-    for(let i=0;i<TOTAL;i++)if(pos.own[i]<0){free.push(i);if(mem.get(i)&&i!==pos.open)known.set(i,pos.d[i]);}
-    const rand=a=>a[Math.floor(Math.random()*a.length)],unseen=free.filter(i=>!mem.has(i)&&i!==pos.open);
-    if(pos.open>=0){for(const [i,v] of known)if(v===pos.d[pos.open])return i;const pool=unseen.length?unseen:free.filter(i=>i!==pos.open);return rand(pool);}
-    const seen=[...known.entries()];for(let a=0;a<seen.length;a++)for(let b=a+1;b<seen.length;b++)if(seen[a][1]===seen[b][1])return seen[a][0];
-    return rand(unseen.length?unseen:free);
+    accept({game:st?st.game+1:0,v:0,seed:1+Math.floor(Math.random()*(2**31-2)),players:st?st.players.slice():mode==='online'?net.order():['me'],moves:[]},true);
   }
   function afterChange(){
-    if(pos.done){const key=st.game+':'+st.v;if(celebrated!==key){celebrated=key;if(pos.winner>=0)ui.burst('🎉');}return;}
-    if(mode==='bot'&&st.players[pos.turn]==='bot'){const g=st.game,v=st.v;botT=setTimeout(()=>{botT=null;if(st.game===g&&st.v===v)flip(botPick(),'bot');},pos.open>=0?650:900);}
+    if(pos.done){const key=st.game+':'+st.v;if(celebrated!==key){celebrated=key;if(pos.winner>=0)ui.burst('🎉');}}
   }
   function render(){
-    ui.roomTag(mode==='online'?net:null,code,mode==='pass'?'同一台手机 · 双人轮流':'和电脑玩');$('copy').classList.toggle('hidden',mode!=='online');$('reacts').classList.toggle('hidden',mode!=='online');
-    const can=!!st&&!pos.done&&seatsHere()&&(mode==='pass'||st.players[pos.turn]===me());
+    ui.roomTag(mode==='online'?net:null,code,'单人挑战');$('copy').classList.toggle('hidden',mode!=='online');$('reacts').classList.toggle('hidden',mode!=='online');
+    $('caption').textContent=mode==='solo'?'找齐全部 8 对就完成挑战，翻错后可以自己继续翻。':'配对成功的牌会变淡，边框颜色是谁收走的。';
+    const can=!!st&&!pos.done&&seatsHere()&&st.players[pos.turn]===me();
     $('status').className='status'+(can?' go':'');
     if(!st)$('status').textContent=net&&!net.connected()?'连接中…':'等 TA 进入同一个房间…';
-    else if(pos.done)$('status').textContent=pos.winner<0?'4 对 4，平手！🤝':nameOf(st.players[pos.winner])+'收走 '+Math.max(...pos.cnt)+' 对，赢啦！🎉';
+    else if(pos.done)$('status').textContent=mode==='solo'?'8 对全部找齐！共翻了 '+st.moves.length+' 张牌 🎉':pos.winner<0?'4 对 4，平手！🤝':nameOf(st.players[pos.winner])+'收走 '+Math.max(...pos.cnt)+' 对，赢啦！🎉';
     else if(mode==='online'&&!st.players.includes(me()))$('status').textContent='本局已有两位玩家，你正在观战';
     else if(!seatsHere())$('status').textContent=!net.connected()?'连接断开，正在重连…':!ready?'正在同步房间…':'等 TA 回来，牌会留在这里';
-    else{const who=mode==='pass'?nameOf(st.players[pos.turn]):'你',pre=pos.lastHit?'配对成功！':pos.miss.length?'没配上～':'';
+    else{const who='你',pre=pos.lastHit?'配对成功！':pos.miss.length?'没配上～':'';
       $('status').textContent=pre+(can?'轮到'+who+(pos.open>=0?'翻第二张':'翻牌'):nameOf(st.players[pos.turn])+'正在翻…');}
     $('round').textContent=st?'第 '+(st.game+1)+' 局 · 还剩 '+pos.own.filter(x=>x<0).length/2+' 对':'';
     for(let p=0;p<2;p++){const e=$('seat'+p),n=document.createElement('b');n.textContent=st?pos.cnt[p]+' 对':'0 对';
-      e.replaceChildren(document.createTextNode((p?'🔵 ':'🔴 ')+(st?nameOf(st.players[p])+(st.game%2===p?' · 先手':''):(p?'等 TA 来':'先手玩家'))),n);e.classList.toggle('active',!!st&&!pos.done&&pos.turn===p);}
+      e.classList.toggle('hidden',mode==='solo'&&p===1);
+      e.replaceChildren(document.createTextNode(mode==='solo'?'已找到的配对':(p?'🔵 ':'🔴 ')+(st?nameOf(st.players[p])+(st.game%2===p?' · 先手':''):(p?'等 TA 来':'先手玩家'))),n);e.classList.toggle('active',!!st&&!pos.done&&pos.turn===p);}
     $('board').replaceChildren();
     for(let i=0;i<TOTAL;i++){
       const b=document.createElement('button'),o=pos?pos.own[i]:-1,up=pos&&(o>=0||pos.open===i||pos.miss.includes(i));
@@ -118,20 +108,20 @@
       const inner=document.createElement('div');inner.className='inner';const bk=document.createElement('div');bk.className='face cb';const fr=document.createElement('div');fr.className='face front';fr.textContent=pos&&up?pos.d[i]:'';
       inner.append(bk,fr);b.appendChild(inner);$('board').appendChild(b);
     }
-    $('again').textContent=pos&&pos.done?'再来一局 · 交换先后手':'重开一局';$('again').disabled=mode==='online'&&(!st||!seatsHere()||!st.players.includes(me()));
+    $('again').textContent=pos&&pos.done?(mode==='solo'?'再来一局':'再来一局 · 交换先后手'):'重开一局';$('again').disabled=mode==='online'&&(!st||!seatsHere()||!st.players.includes(me()));
   }
   function scheduleInit(){clearTimeout(initT);initT=setTimeout(()=>{ready=true;if(!st)restart();render();},1200);}
-  $('board').onclick=e=>{const b=e.target.closest('button');if(b&&!b.disabled)flip(+b.dataset.i,mode==='pass'?st.players[pos.turn]:me());};
-  $('again').onclick=()=>{if(st&&!pos.done&&st.moves.length)ui.modal('重开一局？','会重新洗牌，并交换先后手。',[{label:'取消'},{label:'重开',primary:true,fn:restart}]);else restart();};
+  $('board').onclick=e=>{const b=e.target.closest('button');if(b&&!b.disabled)flip(+b.dataset.i,me());};
+  $('again').onclick=()=>{if(st&&!pos.done&&st.moves.length)ui.modal('重开一局？',mode==='solo'?'重新洗牌，配对进度会清空。':'会重新洗牌，并交换先后手。',[{label:'取消'},{label:'重开',primary:true,fn:restart}]);else restart();};
   $('copy').onclick=()=>ui.copyInvite(code,'翻牌配对');$('leave').onclick=()=>{if(net)net.close();location.href='../'+(mode==='online'?'#'+code:'');};
   ui.reacts(()=>net,9);
   function show(){$('lobby').classList.add('hidden');$('game').classList.remove('hidden');}
   function local(kind){mode=kind;show();restart();}
-  $('pass').onclick=()=>local('pass');
+  if(new URLSearchParams(location.search).get('solo')==='1'){local('solo');return;}
   ui.lobby({onJoin(c){mode='online';code=c;show();net=FB.net('memory',c,{
     onConn(ok){if(ok)scheduleInit();else ready=false;render();},onPeers(joined){if(joined.length)scheduleInit();render();},onState(s){accept(s,false);},
     onEvent(d){if(!st||!st.players.includes(d.from))return;if(d.t==='react'&&ui.EMO.slice(0,9).includes(d.e))ui.float(d.e);if(d.t==='restart'&&d.game===st.game&&me()===st.players[0])restart();}
-  });render();},onLocal(){local('bot');}});
+  });render();},onLocal(){local('solo');}});
 })();
 </script>
 </body>

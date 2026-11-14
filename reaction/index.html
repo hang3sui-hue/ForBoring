@@ -21,9 +21,9 @@
 </head>
 <body>
 <div class="wrap">
-  <section id="lobby"><a class="back" href="../">‹ 返回主页</a><h1>反应力测试</h1><p class="sub">屏幕先是红色，一变绿就马上按。<br>谁按得快谁拿一分，先拿到 3 分的赢 🚦</p>
-    <div class="card"><label for="code">房间号（字母或数字）</label><div class="row"><input id="code" maxlength="12" placeholder="比如 love520" autocomplete="off" autocapitalize="off" spellcheck="false"><button id="rand" class="ghost" aria-label="随机房间号">🎲</button></div><button id="join" class="primary block">进入房间</button><div class="divider">或者</div><button id="local" class="ghost block" style="margin-top:6px">先和电脑玩</button><button id="pass" class="ghost block">同一台手机轮流玩</button></div>
-    <p class="hint">变绿之前按下去算抢跑，这一轮直接输。<br>反应时间在各自的手机上计算，网速快慢不影响结果。</p>
+  <section id="lobby"><a class="back" href="../">‹ 返回主页</a><h1>反应力测试</h1><p class="sub">屏幕先是红色，一变绿就马上按。<br>单人测 5 次，双人联机先拿 3 分的赢 🚦</p>
+    <div class="card"><label for="code">房间号（字母或数字）</label><div class="row"><input id="code" maxlength="12" placeholder="比如 love520" autocomplete="off" autocapitalize="off" spellcheck="false"><button id="rand" class="ghost" aria-label="随机房间号">🎲</button></div><button id="join" class="primary block">双人联机 · 进入房间</button><div class="divider">或者</div><button id="local" class="ghost block" style="margin-top:6px">单人玩</button></div>
+    <p class="hint">变绿之前按下去算抢跑：单人重测，双人这轮判输。<br>反应时间在各自的手机上计算，网速快慢不影响结果。</p>
   </section>
   <section id="game" class="hidden"><div class="topbar"><div id="roomtag" class="roomtag"></div><div class="row" style="gap:6px"><button id="copy" class="ghost small">复制邀请</button><button id="leave" class="ghost small">离开</button></div></div>
     <div class="seats"><div id="seat0" class="seat"></div><div id="seat1" class="seat"></div></div>
@@ -34,16 +34,16 @@
 <div id="modal" class="modal hidden"><div class="card"><h3 id="mT"></h3><p id="mP"></p><div class="row" id="mBtns"></div></div></div><div id="toast" class="toast"></div>
 <script src="../common.js?v=1794620000"></script>
 <script src="../mqtt.min.js"></script>
-<script src="../rt.js?v=1794620000"></script>
+<script src="../rt.js?v=1794700000"></script>
 <script>
 (() => {
 'use strict';
 
 const $=id=>document.getElementById(id),ui=FB.ui,WIN=3;
-let L=null,score=[0,0],n=0,phase='idle',delay=0,t0=0,res={},greenT=null,nextT=null,botT=null,timeoutT=null,best=null;
+let L=null,score=[0,0],trials=[],n=0,phase='idle',delay=0,t0=0,res={},greenT=null,nextT=null,timeoutT=null,best=null;
 try{best=+localStorage.getItem('fb_react_best')||null;}catch(_){}
 const pair=()=>L.pair(),idx=id=>pair().indexOf(id);
-function seats(){for(let p=0;p<2;p++){const id=pair()[p],e=$('seat'+p),b=document.createElement('b');b.textContent=score[p];e.replaceChildren(document.createTextNode(id?L.nameOf(id):'等 TA 来'),b);}}
+function seats(){for(let p=0;p<2;p++){const id=pair()[p],e=$('seat'+p),b=document.createElement('b');e.classList.toggle('hidden',L.mode==='solo'&&p===1);b.textContent=L.mode==='solo'?trials.length+' / 5 次':score[p];e.replaceChildren(document.createTextNode(id?L.nameOf(id):'等 TA 来'),b);}}
 function pads(){
   const box=$('board');box.replaceChildren();box.className='pads'+(L.mode==='pass'?' pass':'');
   const who=L.mode==='pass'?[1,0]:[idx(L.me())];
@@ -53,8 +53,8 @@ function pads(){
 function paint(){
   document.querySelectorAll('.pad').forEach(b=>{
     const id=pair()[+b.dataset.p],r=res[id];let cls='',t='',s='';
-    if(phase==='wait'){cls=r===-1?'foul':'wait';t=r===-1?'抢跑了！':'等它变绿…';s=r===-1?'这一轮判输':'变绿了再按，太早按算输';}
-    else if(phase==='go'){cls=r!==undefined?'res':'go';t=r!==undefined?(r<0?'抢跑了':r+' 毫秒'):'按！';s=r!==undefined?'等对方…':'';}
+    if(phase==='wait'){cls=r===-1?'foul':'wait';t=r===-1?'抢跑了！':'等它变绿…';s=r===-1?(L.mode==='solo'?'不计成绩，重新测试':'这一轮判输'):'变绿了再按';}
+    else if(phase==='go'){cls=r!==undefined?'res':'go';t=r!==undefined?(r<0?'抢跑了':r+' 毫秒'):'按！';s=r!==undefined?(L.mode==='solo'?'下一次准备中':'等对方…'):'';}
     else if(phase==='result'||phase==='over'){cls='res';t=r===undefined?'—':r<0?'抢跑':r+' 毫秒';s=lastMsg;}
     else{cls='res';t=L.both()?'准备…':'等 TA 进来';s=L.watching()?'房间已满，你在观战':'';}
     b.className='pad '+cls+(L.mode==='pass'&&+b.dataset.p===1?' flip':'');b.replaceChildren(document.createTextNode(t));if(s){const m=document.createElement('small');m.textContent=s;b.appendChild(m);}
@@ -64,10 +64,9 @@ function paint(){
 let lastMsg='';
 function status(t){$('status').textContent=t;}
 function arm(k,d){
-  clearTimeout(greenT);clearTimeout(botT);clearTimeout(timeoutT);n=k;delay=d;res={};phase='wait';status('第 '+(n+1)+' 轮 · 屏幕变绿就按');paint();
+  clearTimeout(greenT);clearTimeout(timeoutT);n=k;delay=d;res={};phase='wait';status((L.mode==='solo'?'第 '+(trials.length+1)+' / 5 次':'第 '+(n+1)+' 轮')+' · 屏幕变绿就按');paint();
   greenT=setTimeout(()=>{if(phase!=='wait'||n!==k)return;phase='go';t0=performance.now();paint();
     timeoutT=setTimeout(()=>{pair().forEach(id=>{if(res[id]===undefined&&(L.mode!=='online'||id===L.myId))record(id,3000,true);});},3000);},d);
-  if(L.mode==='bot'){const foul=Math.random()<0.08;botT=setTimeout(()=>{if(n===k&&res.bot===undefined)record('bot',foul?-1:Math.round(performance.now()-t0),false);},foul?Math.random()*d*0.9:d+190+Math.random()*230);}
 }
 function tap(id){
   if(!id||res[id]!==undefined)return;if(L.mode==='online'&&id!==L.myId)return;
@@ -77,8 +76,16 @@ function record(id,ms,send){
   if(res[id]!==undefined)return;res[id]=ms;if(send&&L.mode==='online')L.emit('res',{n,ms});paint();check();
 }
 function check(){
+  if(L.mode==='solo'){
+    const ms=res[L.me()];if(ms===undefined||phase==='result'||phase==='over')return;
+    clearTimeout(greenT);clearTimeout(timeoutT);
+    if(ms>=0&&ms<3000)trials.push(ms);
+    const over=trials.length===5;phase=over?'over':'result';seats();
+    lastMsg=over?'测试完成 · 平均 '+Math.round(trials.reduce((a,b)=>a+b,0)/5)+' 毫秒 · 最快 '+Math.min(...trials)+' 毫秒':ms<0?'抢跑不计成绩，稍后重测':ms>=3000?'超过 3 秒未点击，稍后重测':ms+' 毫秒 · 已完成 '+trials.length+' / 5 次';
+    status(lastMsg);paint();if(!over)nextT=setTimeout(()=>startRound(n+1),1600);return;
+  }
   const [a,b]=pair();if(res[a]===undefined||res[b]===undefined||phase==='result'||phase==='over')return;
-  clearTimeout(greenT);clearTimeout(botT);clearTimeout(timeoutT);
+  clearTimeout(greenT);clearTimeout(timeoutT);
   const ra=res[a],rb=res[b];let w=-1;
   if(ra<0&&rb>=0)w=1;else if(rb<0&&ra>=0)w=0;else if(ra>=0&&rb>=0&&ra!==rb)w=ra<rb?0:1;
   if(w>=0)score[w]++;seats();
@@ -89,11 +96,11 @@ function check(){
   if(!over&&L.isHost())nextT=setTimeout(()=>startRound(n+1),2200);
 }
 function startRound(k){if(!L.both())return;const d=1500+Math.floor(Math.random()*3500);if(L.mode==='online')L.emit('arm',{n:k,d});arm(k,d);}
-function newMatch(send){clearTimeout(nextT);score=[0,0];seats();phase='idle';paint();if(send&&L.mode==='online')L.emit('match',{});if(L.isHost())nextT=setTimeout(()=>startRound(0),1500);}
+function newMatch(send){clearTimeout(nextT);clearTimeout(greenT);clearTimeout(timeoutT);score=[0,0];trials=[];res={};lastMsg='';seats();phase='idle';paint();if(send&&L.mode==='online')L.emit('match',{});if(L.isHost())nextT=setTimeout(()=>startRound(0),1500);}
 $('again').textContent='重新开始';
 $('again').onclick=()=>newMatch(true);
-L=FBLive({key:'reaction',name:'反应力测试',
-  start(l){pads();seats();if(l.mode!=='online')newMatch(false);else status('等 TA 进入同一个房间…');},
+L=FBLive({key:'reaction',name:'反应力测试',solo:true,localLabel:'单人玩',passLabel:false,
+  start(l){pads();seats();$('caption').textContent=l.mode==='solo'?'完成 5 次有效测试，查看平均和最快反应时间；抢跑或超时会重测。':'变绿后尽快按，先拿到 3 分的赢。';if(l.mode!=='online')newMatch(false);else status('等 TA 进入同一个房间…');},
   peers(l){seats();pads();if(l.both()&&phase==='idle'&&l.isHost()){clearTimeout(nextT);nextT=setTimeout(()=>startRound(0),1500);status('人齐了，马上开始');}
     else if(!l.both()&&phase!=='over'){phase='idle';clearTimeout(nextT);status('等 TA 进入同一个房间…');paint();}},
   event(d,l){
